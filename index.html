@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find the Match! - 영어 짝맞추기 게임</title>
+    <title>Find the Match!</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -26,7 +26,11 @@ body {
     justify-content: center;
     align-items: center;
     overflow: hidden; /* 창이 줄어들어 넘쳐도 스크롤바 생성 방지 */
-    
+
+    /* 모바일 브라우저가 자동으로 글자 크기를 키워서 고정 캔버스 배율 계산이 어긋나는 것을 방지 */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+
     font-family: 'Fredoka', 'Noto Sans KR', sans-serif;
     background:
         radial-gradient(circle at top left, rgba(255, 219, 140, 0.45) 0%, transparent 28%),
@@ -81,6 +85,7 @@ body {
   justify-content: space-between; /* 상단-중앙-하단이 비율에 맞춰 배치됨 */
   align-items: center;
   padding: 20px;
+  overflow-y: auto; /* 문제 수/보기 수가 많아 세로로 넘칠 때 잘리지 않고 스크롤되도록 */
 }
         .bg-sparkle {
             position: absolute;
@@ -440,7 +445,7 @@ display: none;
     <div class="glass-pill px-3.5 py-2 rounded-full flex items-center border border-white shadow-sm">
         <span id="progress-display" class="game-font text-lg md:text-xl font-extrabold text-emerald-600">1/10</span>
     </div>
-<button onclick="openHowToPlay()" class="glass-pill px-3.5 py-2 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-extrabold text-sm border border-white shadow-sm transition-all cursor-pointer flex items-center">
+<button onclick="openHowToPlay()" class="glass-pill px-3.5 py-2 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-extrabold text-sm border border-white shadow-sm transition-all cursor-pointer flex items-center whitespace-nowrap shrink-0">
     How to Play
 </button>
 </div>
@@ -989,6 +994,24 @@ function changeDifficulty(diff) {
     document.getElementById('problem-hint').innerText = q.hints[diff];
 }
 
+function buildChoiceOptions(q) {
+    // 현재 선택된 소주제 풀(activeQuestions)에서 정답 외 단어들을 후보로 사용
+    const pool = activeQuestions.map(aq => aq.correct).filter(word => word !== q.correct);
+
+    // 풀이 너무 작으면(예: 데이터 없는 대분류라 예시 문제로 대체된 경우) 문제별 고정 보기를 사용
+    if (pool.length < 3 && Array.isArray(q.options)) {
+        return q.options;
+    }
+
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    const decoyCount = Math.min(11, pool.length); // 정답 포함 최대 12개
+    return [q.correct, ...pool.slice(0, decoyCount)];
+}
+
 function loadQuestion(idx) {
     if (idx >= activeQuestions.length) {
         finishGame();
@@ -1027,7 +1050,7 @@ function loadQuestion(idx) {
     const choicesContainer = document.getElementById('choices-grid');
     choicesContainer.innerHTML = '';
 
-    const shuffledOptions = [...q.options].sort(() => Math.random() - 0.5);
+    const shuffledOptions = buildChoiceOptions(q).sort(() => Math.random() - 0.5);
 
 shuffledOptions.forEach((optText, i) => {
     const btn = document.createElement('button');
