@@ -263,7 +263,7 @@ display: none;
 
 <!-- [여기서부터 팝업 창 추가] -->
 <div id="how-to-play-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
-    <div class="w-full max-w-3xl md:max-w-4xl p-8 md:p-10 rounded-3xl flex flex-col items-center gap-5 text-center border-4 border-white/80 shadow-2xl relative" style="background: linear-gradient(145deg, #b0d7eb 0%, #dcc0de 100%);">
+    <div id="how-to-play-card" class="p-8 md:p-10 rounded-3xl flex flex-col items-center gap-5 text-center border-4 border-white/80 shadow-2xl relative" style="width:900px; background: linear-gradient(145deg, #b0d7eb 0%, #dcc0de 100%);">
         <h2 class="text-3xl md:text-4xl font-extrabold flex items-center gap-2" style="color:#3d5875;">
             How to Play
         </h2>
@@ -670,7 +670,7 @@ img: "apple.png", // 이미지 파일 경로
         thingsWords.forEach(w => {
             questionBank.push({
                 id: questionBank.length + 1,
-                img: `${w.en}.png`,
+                img: `${w.en.replace(/ /g, '_')}.png`,
                 emoji: w.emoji,
                 major: '물건',
                 sub: w.sub,
@@ -1229,6 +1229,13 @@ function resizeGame() {
   if (subcategoryWrapper) {
     const subcategoryScale = Math.min(winW / 1200, winH / 900) * 0.96;
     subcategoryWrapper.style.transform = `scale(${subcategoryScale})`;
+  }
+
+  // How to Play 팝업도 게임 화면(game-wrapper)과 같은 배율로 축소/확대되어
+  // Mission Complete 팝업처럼 화면(액자) 안에 들어있는 것처럼 보이게 함
+  const htpCard = document.getElementById("how-to-play-card");
+  if (htpCard) {
+    htpCard.style.transform = `scale(${scale})`;
   }
 }
 
