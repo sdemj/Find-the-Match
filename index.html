@@ -419,6 +419,12 @@ display: none;
   <button type="button" onclick="backToSubcategoryScreen()" style="position:absolute;top:108px;left:130px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.9);border:2px solid #cfe4f2;border-radius:9999px;padding:9px 20px;font-family:'Fredoka',sans-serif;font-weight:700;font-size:0.95rem;color:#3d5875;cursor:pointer;z-index:3;">
     <i class="fa-solid fa-arrow-left"></i> 뒤로
   </button>
+  <button type="button" onclick="goToScreen('difficulty-screen','intro-screen')" style="position:absolute;top:108px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.9);border:2px solid #cfe4f2;border-radius:9999px;padding:9px 20px;font-family:'Fredoka',sans-serif;font-weight:700;font-size:0.95rem;color:#3d5875;cursor:pointer;z-index:3;">
+    <i class="fa-solid fa-house"></i> 처음으로
+  </button>
+  <button type="button" onclick="startSelectedGame()" style="position:absolute;top:108px;right:130px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.9);border:2px solid #cfe4f2;border-radius:9999px;padding:9px 20px;font-family:'Fredoka',sans-serif;font-weight:700;font-size:0.95rem;color:#3d5875;cursor:pointer;z-index:3;">
+    앞으로 <i class="fa-solid fa-arrow-right"></i>
+  </button>
 
   <div style="position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;padding:60px 110px;box-sizing:border-box;">
 
@@ -476,7 +482,7 @@ display: none;
 
         <div style="display:grid;grid-template-columns:minmax(340px,480px) minmax(0,1fr);gap:20px;align-items:stretch;">
             <div style="width:100%;min-height:440px;box-sizing:border-box;border:4px solid #181830;border-radius:18px;background:linear-gradient(145deg,#fffef9 0%,#fff2cc 100%);display:flex;align-items:center;justify-content:center;overflow:hidden;">
-                <img id="problem-img" src="" alt="문제 이미지" class="w-48 h-auto filter drop-shadow-md">
+                <img id="problem-img" src="" alt="문제 이미지" class="filter drop-shadow-md" style="max-width:92%;max-height:92%;width:auto;height:auto;object-fit:contain;">
                 <span id="problem-emoji" class="hidden filter drop-shadow-md" style="font-size:6.5rem;line-height:1;"></span>
             </div>
 
@@ -1070,8 +1076,8 @@ function changeDifficulty(diff) {
 }
 
 function buildChoiceOptions(q) {
-    // 현재 선택된 소주제 풀(activeQuestions)에서 정답 외 단어들을 후보로 사용
-    const pool = activeQuestions.map(aq => aq.correct).filter(word => word !== q.correct);
+    // 현재 선택된 소주제 풀(activeQuestions)에서 정답 외 단어들을 후보로 사용 (중복 라운드로 인한 중복 단어 제거)
+    const pool = [...new Set(activeQuestions.map(aq => aq.correct))].filter(word => word !== q.correct);
 
     // 풀이 너무 작으면(예: 데이터 없는 대분류라 예시 문제로 대체된 경우) 문제별 고정 보기를 사용
     if (pool.length < 3 && Array.isArray(q.options)) {
