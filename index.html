@@ -261,6 +261,15 @@ display: none;
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen text-slate-800">
 
+<!-- [배경음악] 인트로/주제선택/난이도선택용, 실제 게임화면용 두 트랙 -->
+<audio id="bgm-intro" src="fluxsound-cheerful-upbeat-kids-486631.mp3" loop preload="auto"></audio>
+<audio id="bgm-game" src="dreamy_rabbit-8-bit-game-music-122259.mp3" loop preload="auto"></audio>
+
+<!-- [배경음악 On/Off 버튼] 모든 화면/팝업 위에 항상 떠 있음 -->
+<button type="button" id="music-toggle-btn" onclick="toggleMusic()" class="glass-pill" style="position:fixed;top:18px;right:18px;z-index:9999;width:52px;height:52px;border-radius:9999px;border:2px solid rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;color:#3b3a66;">
+  <i class="fa-solid fa-music" id="music-toggle-icon"></i>
+</button>
+
 <!-- [여기서부터 팝업 창 추가] -->
 <div id="how-to-play-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-6" style="background:rgba(24,24,48,0.55);" onclick="closeHowToPlay()">
     <div id="how-to-play-card" class="relative" style="width:720px;max-width:100%;background:#ffffff;border:4px solid #181830;border-radius:24px;padding:38px 44px;display:flex;flex-direction:column;gap:22px;box-sizing:border-box;" onclick="event.stopPropagation()">
@@ -595,6 +604,77 @@ display: none;
             }
         }
 
+        /* ================= BACKGROUND MUSIC ================= */
+        const bgmTracks = {
+            intro: document.getElementById('bgm-intro'), // 인트로/주제선택/난이도선택 화면
+            game: document.getElementById('bgm-game')    // 실제 게임 화면
+        };
+        let currentBgmKey = 'intro';
+        let musicMuted = false; // 초기 상태: 음악 켜짐
+        let audioUnlocked = false; // 브라우저가 소리 재생을 허용했는지 여부 (사용자 상호작용 필요)
+
+        // 잠금 해제 전에는 음소거 상태로 재생(대부분의 브라우저가 음소거 자동재생은 허용함)
+        function syncBgmAudio(audio) {
+            if (!audio) return;
+            audio.muted = !audioUnlocked;
+        }
+
+        function tryPlayCurrentBgm() {
+            if (musicMuted) return;
+            const audio = bgmTracks[currentBgmKey];
+            if (!audio) return;
+            syncBgmAudio(audio);
+            if (audio.paused) audio.play().catch(() => {});
+        }
+
+        function playBgm(key) {
+            if (currentBgmKey === key) return;
+            currentBgmKey = key;
+            Object.keys(bgmTracks).forEach(k => {
+                const audio = bgmTracks[k];
+                if (k === key) {
+                    audio.currentTime = 0;
+                    if (!musicMuted) {
+                        syncBgmAudio(audio);
+                        audio.play().catch(() => {});
+                    }
+                } else {
+                    audio.pause();
+                }
+            });
+        }
+
+        function toggleMusic() {
+            musicMuted = !musicMuted;
+            const audio = bgmTracks[currentBgmKey];
+            const icon = document.getElementById('music-toggle-icon');
+            if (musicMuted) {
+                audio.pause();
+                if (icon) icon.className = 'fa-solid fa-volume-xmark';
+            } else {
+                syncBgmAudio(audio);
+                audio.play().catch(() => {});
+                if (icon) icon.className = 'fa-solid fa-music';
+            }
+        }
+
+        // 페이지 로드 시 음소거 상태로 먼저 재생을 걸어두고, 사용자의 첫 클릭/터치/키 입력이 들어오는
+        // 즉시 음소거를 풀어 끊김 없이 소리가 나오도록 함 (브라우저의 자동재생 정책 우회)
+        function initBgm() {
+            tryPlayCurrentBgm();
+            const unlockAudio = () => {
+                audioUnlocked = true;
+                tryPlayCurrentBgm();
+                document.removeEventListener('pointerdown', unlockAudio);
+                document.removeEventListener('keydown', unlockAudio);
+                document.removeEventListener('touchstart', unlockAudio);
+            };
+            document.addEventListener('pointerdown', unlockAudio);
+            document.addEventListener('keydown', unlockAudio);
+            document.addEventListener('touchstart', unlockAudio);
+        }
+        window.addEventListener('load', initBgm);
+
         /* ================= QUESTION DATASET ================= */
         const questionBank = [
             {
@@ -615,49 +695,8 @@ img: "apple.png", // 이미지 파일 경로
             }
         ];
 
-        /* ================= 물건(Things) 소주제 단어 데이터 ================= */
+        /* ================= 대분류별 소주제 단어 데이터 ================= */
         // 실제 이미지가 아직 없어서 임시로 이모지를 그림 대신 사용합니다.
-        const thingsWords = [
-            { en: 'textbook', sub: 'School', emoji: '📖', hints: { 하: '교과서', 중: '학교에서 배울 내용이 담긴 책이에요.', 상: '학생들이 수업 시간에 특정 과목의 내용을 배우기 위해 사용하는, 교육 과정에 맞춰 만들어진 책.' } },
-            { en: 'pencil', sub: 'School', emoji: '✏️', hints: { 하: '연필', 중: '나무 막대 안에 흑연 심이 들어 있어 글씨를 쓰는 도구예요.', 상: '흑연과 점토를 섞어 만든 심을 나무로 감싼 필기구로, 깎아서 사용하고 지우개로 지울 수 있는 것.' } },
-            { en: 'eraser', sub: 'School', emoji: '⬜', hints: { 하: '지우개', 중: '연필로 쓴 글씨를 문질러서 지우는 물건이에요.', 상: '고무나 비닐 재질로 만들어져, 종이 위에 연필로 쓴 흔적을 문질러 없애는 데 쓰는 학용품.' } },
-            { en: 'glue stick', sub: 'School', emoji: '🧴', hints: { 하: '풀', 중: '종이를 붙일 때 문질러서 바르는 막대 모양 도구예요.', 상: '고체 형태의 접착제를 막대 모양 케이스에 담아, 돌려 올려 종이나 색종이를 붙일 때 사용하는 학용품.' } },
-            { en: 'notebook', sub: 'School', emoji: '📓', hints: { 하: '공책', 중: '줄이 그어진 종이를 묶어서 필기할 수 있게 만든 책이에요.', 상: '수업 내용이나 생각을 적을 수 있도록 빈 종이 여러 장을 묶어 만든, 필기용 책자.' } },
-            { en: 'ruler', sub: 'School', emoji: '📏', hints: { 하: '자', 중: '길이를 재거나 반듯한 선을 그을 때 쓰는 막대예요.', 상: '눈금이 새겨진 판이나 막대 모양의 도구로, 길이를 측정하거나 직선을 그릴 때 사용하는 것.' } },
-            { en: 'scissors', sub: 'School', emoji: '✂️', hints: { 하: '가위', 중: '두 개의 날을 교차시켜 종이나 천을 자르는 도구예요.', 상: '두 개의 칼날이 하나의 축으로 연결되어 있어, 손잡이를 오므렸다 펼치며 물건을 자르는 데 쓰는 도구.' } },
-            { en: 'pencil case', sub: 'School', emoji: '📦', hints: { 하: '필통', 중: '연필이나 지우개 같은 학용품을 넣어 다니는 통이에요.', 상: '연필, 지우개, 자 등 여러 학용품을 한데 모아 넣어 보관하고 다닐 수 있게 만든 작은 통.' } },
-            { en: 'backpack', sub: 'School', emoji: '🎒', hints: { 하: '책가방', 중: '책이나 물건을 넣어 등에 메고 다니는 가방이에요.', 상: '양쪽 어깨끈으로 등에 메도록 만들어진 가방으로, 책이나 학용품 등을 넣어 다닐 때 사용하는 것.' } },
-            { en: 'crayon', sub: 'School', emoji: '🖍️', hints: { 하: '크레파스', 중: '여러 색깔로 그림을 그릴 때 쓰는 막대 모양 재료예요.', 상: '안료와 왁스를 굳혀 막대 모양으로 만든 채색 도구로, 종이 위에 문질러 색을 칠할 때 사용하는 것.' } },
-            { en: 'computer', sub: 'School', emoji: '💻', hints: { 하: '컴퓨터', 중: '화면을 보면서 다양한 작업을 할 수 있는 전자 기기예요.', 상: '정보를 입력, 저장, 처리하여 화면에 결과를 보여주는 전자 장치로, 공부나 업무, 오락 등에 널리 쓰이는 기기.' } },
-            { en: 'board', sub: 'School', emoji: '📋', hints: { 하: '칠판', 중: '분필이나 마카로 글씨를 쓰는 넓고 평평한 판이에요.', 상: '교실 앞쪽에 걸려 있는 넓은 판으로, 선생님이 분필이나 보드마카로 수업 내용을 적을 때 사용하는 것.' } },
-
-            { en: 'door', sub: 'House', emoji: '🚪', hints: { 하: '문', 중: '방이나 건물을 드나들 때 여닫는 곳이에요.', 상: '건물이나 방의 출입구에 설치되어, 열고 닫으며 안팎을 드나들 수 있게 해주는 것.' } },
-            { en: 'window', sub: 'House', emoji: '🪟', hints: { 하: '창문', 중: '빛이 들어오고 밖을 내다볼 수 있는, 벽에 낸 구멍이에요.', 상: '건물의 벽에 낸 개구부에 유리를 끼워, 햇빛이 들어오고 환기를 시키며 밖을 내다볼 수 있게 만든 것.' } },
-            { en: 'bed', sub: 'House', emoji: '🛏️', hints: { 하: '침대', 중: '누워서 잠을 자는 가구예요.', 상: '매트리스와 프레임으로 이루어져, 사람이 눕거나 잠을 잘 수 있도록 만든 가구.' } },
-            { en: 'chair', sub: 'House', emoji: '🪑', hints: { 하: '의자', 중: '앉을 때 쓰는, 등받이가 있는 가구예요.', 상: '다리와 좌석, 대개 등받이로 이루어져 한 사람이 앉을 수 있도록 만든 가구.' } },
-            { en: 'desk', sub: 'House', emoji: '🗄️', hints: { 하: '책상', 중: '책을 읽거나 글을 쓸 때 앞에 놓고 쓰는 가구예요.', 상: '평평한 상판과 다리로 이루어져, 앉아서 책을 읽거나 글씨를 쓰고 공부할 때 사용하는 가구.' } },
-            { en: 'clock', sub: 'House', emoji: '🕐', hints: { 하: '시계', 중: '지금 몇 시인지 알려주는 물건이에요.', 상: '바늘이나 숫자를 이용해 현재 시각을 표시해 주는 도구로, 벽에 걸거나 책상 위에 놓고 사용하는 것.' } },
-            { en: 'robot', sub: 'House', emoji: '🤖', hints: { 하: '로봇', 중: '사람처럼 움직이거나 일을 대신 해주는 기계예요.', 상: '프로그램된 명령에 따라 스스로 움직이며 다양한 작업을 수행할 수 있도록 만들어진 기계 장치.' } },
-            { en: 'doll', sub: 'House', emoji: '🪆', hints: { 하: '인형', 중: '사람이나 동물 모양으로 만든, 가지고 노는 장난감이에요.', 상: '사람이나 동물의 모습을 본떠 헝겊, 플라스틱 등으로 만든, 주로 아이들이 가지고 노는 장난감.' } },
-            { en: 'umbrella', sub: 'House', emoji: '☂️', hints: { 하: '우산', 중: '비가 올 때 펴서 머리 위로 받쳐 쓰는 물건이에요.', 상: '펼치면 둥근 지붕 모양이 되는 물건으로, 비나 햇빛을 막기 위해 손에 들고 머리 위에 받쳐 쓰는 것.' } },
-            { en: 'fan', sub: 'House', emoji: '🪭', hints: { 하: '선풍기', 중: '날개를 돌려서 시원한 바람을 만들어 주는 기계예요.', 상: '전기의 힘으로 날개를 회전시켜 바람을 일으키는 기계로, 더울 때 시원하게 하기 위해 사용하는 것.' } },
-            { en: 'lamp', sub: 'House', emoji: '💡', hints: { 하: '램프', 중: '방 안을 밝게 비춰 주는 조명 기구예요.', 상: '전구나 불빛을 이용해 주변을 밝게 비춰 주는 조명 기구로, 책상이나 방 안에 두고 사용하는 것.' } },
-            { en: 'sofa', sub: 'House', emoji: '🛋️', hints: { 하: '소파', 중: '여러 명이 편하게 앉을 수 있는 푹신한 의자예요.', 상: '등받이와 팔걸이가 있고 속을 푹신하게 채운, 거실 등에 두고 여러 사람이 편안히 앉는 가구.' } },
-
-            { en: 'cap', sub: 'Clothing', emoji: '🧢', hints: { 하: '캡모자', 중: '앞쪽에 챙이 달려 있어 야구할 때나 햇빛을 가릴 때 머리에 쓰는 물건이에요.', 상: '둥근 머리 부분과 앞으로 튀어나온 챙으로 이루어져, 스포츠나 야외 활동을 할 때 햇빛을 가리기 위해 주로 쓰는 것.' } },
-            { en: 'hat', sub: 'Clothing', emoji: '🎩', hints: { 하: '모자', 중: '머리에 쓰는 물건이에요.', 상: '머리 전체를 덮도록 만들어진 물건으로, 햇빛이나 추위를 막거나 멋을 내기 위해 머리에 쓰는 것.' } },
-            { en: 'jacket', sub: 'Clothing', emoji: '🧥', hints: { 하: '재킷', 중: '앞이 트여 있어 입고 벗기 편한 겉옷이에요.', 상: '앞쪽에 단추나 지퍼가 달려 있어 쉽게 여미고 벗을 수 있는, 몸통을 덮는 겉옷.' } },
-            { en: 'dress', sub: 'Clothing', emoji: '👗', hints: { 하: '원피스', 중: '위아래가 하나로 이어진 여성용 옷이에요.', 상: '상의와 치마 부분이 하나로 붙어 있어, 위아래를 따로 입지 않고 한 벌로 입는 옷.' } },
-            { en: 'skirt', sub: 'Clothing', emoji: '👚', hints: { 하: '치마', 중: '허리부터 아래로 늘어지는, 다리를 감싸는 옷이에요.', 상: '허리에 둘러 입어 하체를 감싸는 옷으로, 바지와 달리 다리 사이가 나뉘어 있지 않은 것.' } },
-            { en: 'pants', sub: 'Clothing', emoji: '👖', hints: { 하: '바지', 중: '다리를 각각 감싸는, 아래에 입는 옷이에요.', 상: '허리부터 발목까지 두 다리를 각각 감싸도록 만들어진 하의.' } },
-            { en: 'shoes', sub: 'Clothing', emoji: '👟', hints: { 하: '신발', 중: '발을 보호하기 위해 신는 물건이에요.', 상: '걸을 때 발을 땅으로부터 보호하고 편안하게 해주기 위해 발에 신는 물건.' } },
-            { en: 'gloves', sub: 'Clothing', emoji: '🧤', hints: { 하: '장갑', 중: '손을 따뜻하게 하거나 보호하기 위해 끼는 물건이에요.', 상: '손 모양에 맞춰 만들어져, 추위나 상처로부터 손을 보호하기 위해 손에 끼는 것.' } },
-            { en: 'glasses', sub: 'Clothing', emoji: '👓', hints: { 하: '안경', 중: '눈이 잘 안 보일 때 얼굴에 쓰는 물건이에요.', 상: '렌즈와 테로 이루어져, 시력을 교정하거나 눈을 보호하기 위해 얼굴에 쓰는 물건.' } },
-            { en: 'socks', sub: 'Clothing', emoji: '🧦', hints: { 하: '양말', 중: '신발을 신기 전에 발에 먼저 신는 것이에요.', 상: '발과 발목을 감싸도록 천이나 실로 짜서 만든, 신발 안에 신는 옷.' } },
-            { en: 'shirt', sub: 'Clothing', emoji: '👕', hints: { 하: '셔츠', 중: '단추가 달린, 위에 입는 옷이에요.', 상: '깃과 단추가 달려 있고 소매가 있는, 상체에 입는 옷.' } },
-            { en: 'scarf', sub: 'Clothing', emoji: '🧣', hints: { 하: '목도리', 중: '추울 때 목에 두르는 물건이에요.', 상: '천이나 털실로 길게 짠 것으로, 추위를 막기 위해 목에 둘러 감는 물건.' } }
-        ];
-
         function pickRandomDecoys(pool, excludeEn, count) {
             const candidates = pool.filter(w => w.en !== excludeEn).map(w => w.en);
             for (let i = candidates.length - 1; i > 0; i--) {
@@ -667,23 +706,435 @@ img: "apple.png", // 이미지 파일 경로
             return candidates.slice(0, count);
         }
 
-        thingsWords.forEach(w => {
-            questionBank.push({
-                id: questionBank.length + 1,
-                img: `${w.en.replace(/ /g, '_')}.png`,
-                emoji: w.emoji,
-                major: '물건',
-                sub: w.sub,
-                prompts: {
-                    하: "다음 그림에 해당하는 알맞은 영어 단어는 무엇일까요?",
-                    중: "다음 그림에 해당하는 알맞은 영어 단어는 무엇일까요?",
-                    상: "다음 그림에 해당하는 알맞은 영어 단어는 무엇일까요?"
-                },
-                hints: w.hints,
-                correct: w.en,
-                options: [w.en, ...pickRandomDecoys(thingsWords, w.en, 10)]
+        function pushWordsToBank(major, wordsArr) {
+            wordsArr.forEach(w => {
+                questionBank.push({
+                    id: questionBank.length + 1,
+                    img: `${w.en.replace(/ /g, '_')}.png`,
+                    emoji: w.emoji,
+                    major: major,
+                    sub: w.sub,
+                    prompts: {
+                        하: "다음 그림에 해당하는 알맞은 영어 단어는 무엇일까요?",
+                        중: "다음 그림에 해당하는 알맞은 영어 단어는 무엇일까요?",
+                        상: "다음 그림에 해당하는 알맞은 영어 단어는 무엇일까요?"
+                    },
+                    hints: w.hints,
+                    correct: w.en,
+                    options: [w.en, ...pickRandomDecoys(wordsArr, w.en, 10)]
+                });
             });
-        });
+        }
+
+        /* --- 숫자·색깔·시간 --- */
+        const numberColorTimeWords = [
+            { en: 'seven', sub: 'Number', emoji: '7️⃣', hints: { 하: '칠, 7', 중: '6과 8 사이에 있는 숫자예요.', 상: '6보다 1 크고 8보다 1 작은 수.' } },
+            { en: 'eight', sub: 'Number', emoji: '8️⃣', hints: { 하: '팔, 8', 중: '7과 9 사이에 있는 숫자예요.', 상: '7보다 1 크고 9보다 1 작은 수.' } },
+            { en: 'nine', sub: 'Number', emoji: '9️⃣', hints: { 하: '구, 9', 중: '8과 10 사이에 있는 숫자예요.', 상: '8보다 1 크고 10보다 1 작은 수.' } },
+            { en: 'ten', sub: 'Number', emoji: '🔟', hints: { 하: '십, 10', 중: '두 자리 숫자가 시작되는 첫 숫자예요.', 상: '9보다 1 크며, 손가락 열 개의 개수와 같은 수.' } },
+            { en: 'eleven', sub: 'Number', emoji: '🔢', hints: { 하: '십일, 11', 중: '10보다 하나 더 많은 수예요.', 상: '10에 1을 더한 두 자리 수.' } },
+            { en: 'twelve', sub: 'Number', emoji: '🔢', hints: { 하: '십이, 12', 중: '1년의 달 수와 같은 숫자예요.', 상: '10에 2를 더한 수로, 1년의 개월 수와 같음.' } },
+            { en: 'thirteen', sub: 'Number', emoji: '🔢', hints: { 하: '십삼, 13', 중: '12보다 하나 더 많은 수예요.', 상: '10에 3을 더한 두 자리 수.' } },
+            { en: 'fourteen', sub: 'Number', emoji: '🔢', hints: { 하: '십사, 14', 중: '13보다 하나 더 많은 수예요.', 상: '10에 4를 더한 두 자리 수.' } },
+            { en: 'fifteen', sub: 'Number', emoji: '🔢', hints: { 하: '십오, 15', 중: '14보다 하나 더 많은 수예요.', 상: '10에 5를 더한 두 자리 수.' } },
+            { en: 'sixteen', sub: 'Number', emoji: '🔢', hints: { 하: '십육, 16', 중: '15보다 하나 더 많은 수예요.', 상: '10에 6을 더한 두 자리 수.' } },
+            { en: 'seventeen', sub: 'Number', emoji: '🔢', hints: { 하: '십칠, 17', 중: '16보다 하나 더 많은 수예요.', 상: '10에 7을 더한 두 자리 수.' } },
+            { en: 'eighteen', sub: 'Number', emoji: '🔢', hints: { 하: '십팔, 18', 중: '17보다 하나 더 많은 수예요.', 상: '10에 8을 더한 두 자리 수.' } },
+            { en: 'nineteen', sub: 'Number', emoji: '🔢', hints: { 하: '십구, 19', 중: '20보다 하나 더 적은 수예요.', 상: '10에 9를 더한 두 자리 수.' } },
+            { en: 'twenty', sub: 'Number', emoji: '🔢', hints: { 하: '이십, 20', 중: '10이 두 번 더해진 수예요.', 상: '10의 2배가 되는 수.' } },
+            { en: 'thirty', sub: 'Number', emoji: '🔢', hints: { 하: '삼십, 30', 중: '10이 세 번 더해진 수예요.', 상: '10의 3배가 되는 수.' } },
+            { en: 'forty', sub: 'Number', emoji: '🔢', hints: { 하: '사십, 40', 중: '10이 네 번 더해진 수예요.', 상: '10의 4배가 되는 수.' } },
+            { en: 'fifty', sub: 'Number', emoji: '🔢', hints: { 하: '오십, 50', 중: '100의 절반이 되는 수예요.', 상: '10의 5배가 되며, 100의 절반인 수.' } },
+            { en: 'sixty', sub: 'Number', emoji: '🔢', hints: { 하: '육십, 60', 중: '1시간이 몇 분인지와 같은 수예요.', 상: '10의 6배가 되며, 1시간을 이루는 분(分)의 수.' } },
+            { en: 'seventy', sub: 'Number', emoji: '🔢', hints: { 하: '칠십, 70', 중: '10이 일곱 번 더해진 수예요.', 상: '10의 7배가 되는 수.' } },
+            { en: 'eighty', sub: 'Number', emoji: '🔢', hints: { 하: '팔십, 80', 중: '10이 여덟 번 더해진 수예요.', 상: '10의 8배가 되는 수.' } },
+            { en: 'ninety', sub: 'Number', emoji: '🔢', hints: { 하: '구십, 90', 중: '100보다 10 적은 수예요.', 상: '10의 9배가 되며, 100보다 10 작은 수.' } },
+            { en: 'hundred', sub: 'Number', emoji: '💯', hints: { 하: '백, 100', 중: '10이 열 번 더해진 큰 수예요.', 상: '10의 10배가 되는 세 자리 수의 시작.' } },
+            { en: 'thousand', sub: 'Number', emoji: '🔢', hints: { 하: '천, 1000', 중: '100이 열 번 더해진 아주 큰 수예요.', 상: '100의 10배가 되는 네 자리 수의 시작.' } },
+
+            { en: 'blue', sub: 'Color', emoji: '🟦', hints: { 하: '파란색', 중: '맑은 하늘이나 바다에서 볼 수 있는 색이에요.', 상: '맑은 날 하늘이나 깊은 바다에서 흔히 볼 수 있는, 차가운 느낌을 주는 색.' } },
+            { en: 'purple', sub: 'Color', emoji: '🟪', hints: { 하: '보라색', 중: '빨강과 파랑을 섞으면 나오는 색이에요.', 상: '빨간색과 파란색을 섞어서 만들어지는, 포도와 비슷한 색.' } },
+            { en: 'brown', sub: 'Color', emoji: '🟫', hints: { 하: '갈색', 중: '나무줄기나 흙에서 볼 수 있는 색이에요.', 상: '나무껍질이나 흙, 초콜릿에서 흔히 볼 수 있는 어두운 주황빛 색.' } },
+            { en: 'gray', sub: 'Color', emoji: '⬜', hints: { 하: '회색', 중: '검은색과 흰색을 섞으면 나오는 색이에요.', 상: '흰색과 검은색을 섞어 만들어지는, 구름이나 재와 비슷한 색.' } },
+            { en: 'pink', sub: 'Color', emoji: '🩷', hints: { 하: '분홍색', 중: '빨강과 흰색을 섞으면 나오는 밝은 색이에요.', 상: '빨간색에 흰색을 섞어 만들어지는, 벚꽃이나 복숭아와 비슷한 부드러운 색.' } },
+            { en: 'color', sub: 'Color', emoji: '🎨', hints: { 하: '색깔', 중: '물체가 눈에 보이는 빛깔을 뜻해요.', 상: '빛의 파장에 따라 물체가 눈에 다르게 보이는 특성을 나타내는 말.' } },
+            { en: 'rainbow', sub: 'Color', emoji: '🌈', hints: { 하: '무지개', 중: '비가 그친 뒤 하늘에 여러 색으로 뜨는 것이에요.', 상: '비가 그친 뒤 햇빛이 물방울에 굴절되어 하늘에 여러 색깔의 띠로 나타나는 현상.' } },
+
+            { en: 'evening', sub: 'Time & Date', emoji: '🌆', hints: { 하: '저녁', 중: '해가 지고 밤이 되기 전의 시간이에요.', 상: '오후가 끝나고 밤이 시작되기 전, 해가 지는 무렵의 시간대.' } },
+            { en: 'night', sub: 'Time & Date', emoji: '🌙', hints: { 하: '밤', 중: '해가 지고 어두워진 시간이에요.', 상: '해가 완전히 진 뒤부터 다음 날 해가 뜨기 전까지의 어두운 시간대.' } },
+            { en: 'time', sub: 'Time & Date', emoji: '⏰', hints: { 하: '시간', 중: '몇 시인지, 얼마나 지났는지를 나타내는 말이에요.', 상: '사건이 일어나는 순간이나 그 흐름을 재는 단위 또는 개념.' } },
+            { en: 'today', sub: 'Time & Date', emoji: '📅', hints: { 하: '오늘', 중: '지금 이 날을 가리키는 말이에요.', 상: '어제와 내일 사이, 지금 진행되고 있는 바로 이 날.' } },
+            { en: 'tomorrow', sub: 'Time & Date', emoji: '📆', hints: { 하: '내일', 중: '오늘의 다음 날이에요.', 상: '오늘 다음으로 오는, 아직 오지 않은 날.' } },
+            { en: 'yesterday', sub: 'Time & Date', emoji: '📆', hints: { 하: '어제', 중: '오늘의 하루 전날이에요.', 상: '오늘보다 하루 앞서 지나간, 이미 지나가 버린 날.' } },
+            { en: 'weekend', sub: 'Time & Date', emoji: '🛌', hints: { 하: '주말', 중: '토요일과 일요일을 함께 부르는 말이에요.', 상: '한 주의 끝인 토요일과 일요일을 아울러 이르는 말로, 보통 쉬는 날.' } },
+            { en: 'noon', sub: 'Time & Date', emoji: '🕛', hints: { 하: '정오, 낮 12시', 중: '하루 중 해가 가장 높이 뜨는 낮 12시예요.', 상: '하루를 오전과 오후로 나누는 기준이 되는, 낮 열두 시.' } },
+            { en: 'season', sub: 'Time & Date', emoji: '🍂', hints: { 하: '계절', 중: '봄, 여름, 가을, 겨울처럼 날씨가 바뀌는 시기예요.', 상: '기후 변화에 따라 한 해를 봄·여름·가을·겨울로 나눈 것.' } },
+            { en: 'future', sub: 'Time & Date', emoji: '🚀', hints: { 하: '미래', 중: '아직 오지 않은, 앞으로 다가올 시간이에요.', 상: '현재를 기준으로 아직 오지 않았지만 앞으로 다가올 시간.' } },
+            { en: 'Monday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '월요일', 중: '한 주가 시작되는 첫 번째 요일이에요.', 상: '일요일 다음, 한 주의 시작을 알리는 요일.' } },
+            { en: 'Tuesday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '화요일', 중: '월요일 다음 날이에요.', 상: '월요일과 수요일 사이에 있는 요일.' } },
+            { en: 'Wednesday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '수요일', 중: '한 주의 한가운데에 있는 요일이에요.', 상: '화요일과 목요일 사이, 한 주의 중간에 있는 요일.' } },
+            { en: 'Thursday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '목요일', 중: '수요일 다음 날이에요.', 상: '수요일과 금요일 사이에 있는 요일.' } },
+            { en: 'Friday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '금요일', 중: '주말 바로 전날이에요.', 상: '목요일과 토요일 사이, 흔히 한 주의 업무가 끝나는 요일.' } },
+            { en: 'Saturday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '토요일', 중: '주말이 시작되는 요일이에요.', 상: '금요일과 일요일 사이, 주말의 첫 번째 날.' } },
+            { en: 'Sunday', sub: 'Time & Date', emoji: '🗓️', hints: { 하: '일요일', 중: '한 주의 마지막 요일이에요.', 상: '토요일 다음에 오는, 한 주를 마무리하는 요일.' } },
+            { en: 'spring', sub: 'Time & Date', emoji: '🌸', hints: { 하: '봄', 중: '겨울 다음에 오는, 꽃이 피는 계절이에요.', 상: '겨울과 여름 사이에 있는 계절로, 날씨가 따뜻해지고 꽃이 피는 시기.' } },
+            { en: 'summer', sub: 'Time & Date', emoji: '☀️', hints: { 하: '여름', 중: '날씨가 가장 더운 계절이에요.', 상: '봄과 가을 사이에 있는 계절로, 한 해 중 기온이 가장 높은 시기.' } },
+            { en: 'fall', sub: 'Time & Date', emoji: '🍁', hints: { 하: '가을', 중: '단풍이 들고 날씨가 선선해지는 계절이에요.', 상: '여름과 겨울 사이에 있는 계절로, 나뭇잎이 물들고 서늘해지는 시기.' } },
+            { en: 'winter', sub: 'Time & Date', emoji: '❄️', hints: { 하: '겨울', 중: '날씨가 가장 추운 계절이에요.', 상: '가을과 봄 사이에 있는 계절로, 한 해 중 기온이 가장 낮은 시기.' } }
+        ];
+        pushWordsToBank('숫자·색깔·시간', numberColorTimeWords);
+
+        /* --- 사람과 동물 --- */
+        const peopleAnimalWords = [
+            { en: 'neck', sub: 'Body', emoji: '🧑', hints: { 하: '목', 중: '머리와 몸통을 이어 주는 부분이에요.', 상: '머리와 몸통 사이에 있어 머리를 움직일 수 있게 해 주는 신체 부위.' } },
+            { en: 'hair', sub: 'Body', emoji: '💇', hints: { 하: '머리카락', 중: '머리 위에 자라는 가늘고 긴 것이에요.', 상: '머리 피부에서 자라나는 가늘고 긴 실 모양의 것.' } },
+            { en: 'head', sub: 'Body', emoji: '🗣️', hints: { 하: '머리', 중: '몸의 가장 위쪽에 있는 부분이에요.', 상: '눈, 코, 입, 귀가 있으며 뇌가 들어 있는, 몸의 맨 위쪽 부위.' } },
+            { en: 'foot', sub: 'Body', emoji: '🦶', hints: { 하: '발', 중: '다리 끝에 있는, 걸을 때 땅에 닿는 부분이에요.', 상: '다리의 맨 끝에 있어 서고 걷는 데 쓰이는 신체 부위.' } },
+            { en: 'finger', sub: 'Body', emoji: '👆', hints: { 하: '손가락', 중: '손 끝에 갈라져 있는 다섯 개의 부분이에요.', 상: '손바닥 끝에 갈라져 있어 물건을 잡거나 가리킬 때 쓰는 부위.' } },
+            { en: 'leg', sub: 'Body', emoji: '🦵', hints: { 하: '다리', 중: '몸을 지탱하고 걷게 해 주는 부분이에요.', 상: '엉덩이부터 발까지 이어져, 서고 걷고 뛰는 데 쓰이는 신체 부위.' } },
+            { en: 'arm', sub: 'Body', emoji: '💪', hints: { 하: '팔', 중: '어깨부터 손까지 이어진 부분이에요.', 상: '어깨와 손 사이를 이어 주며, 물건을 들거나 잡는 데 쓰는 부위.' } },
+            { en: 'skin', sub: 'Body', emoji: '🖐️', hints: { 하: '피부', 중: '몸을 감싸고 있는 겉면이에요.', 상: '몸 전체를 덮어 보호하는, 가장 바깥쪽의 얇은 막.' } },
+            { en: 'hand', sub: 'Body', emoji: '✋', hints: { 하: '손', 중: '팔 끝에 있어 물건을 잡는 부분이에요.', 상: '팔목 끝에 달려 있으며, 손가락으로 물건을 잡거나 만지는 데 쓰는 부위.' } },
+
+            { en: 'parents', sub: 'Family & People', emoji: '👨‍👩‍👧', hints: { 하: '부모님', 중: '아빠와 엄마를 함께 부르는 말이에요.', 상: '자녀를 낳거나 기르는 아버지와 어머니를 함께 이르는 말.' } },
+            { en: 'uncle', sub: 'Family & People', emoji: '👨', hints: { 하: '삼촌, 아저씨', 중: '아빠나 엄마의 남자 형제를 부르는 말이에요.', 상: '부모의 남자 형제나, 이모·고모의 남편을 이르는 말.' } },
+            { en: 'aunt', sub: 'Family & People', emoji: '👩', hints: { 하: '이모, 고모', 중: '아빠나 엄마의 여자 형제를 부르는 말이에요.', 상: '부모의 여자 형제나, 삼촌의 아내를 이르는 말.' } },
+            { en: 'cousin', sub: 'Family & People', emoji: '🧑', hints: { 하: '사촌', 중: '삼촌이나 이모의 자녀를 부르는 말이에요.', 상: '부모의 형제자매가 낳은 자녀를 이르는 말.' } },
+            { en: 'baby', sub: 'Family & People', emoji: '👶', hints: { 하: '아기', 중: '태어난 지 얼마 안 된 어린아이예요.', 상: '태어난 지 얼마 되지 않아 스스로 걷거나 말하지 못하는 어린 사람.' } },
+            { en: 'child', sub: 'Family & People', emoji: '🧒', hints: { 하: '어린이', 중: '아직 어른이 되지 않은 사람이에요.', 상: '나이가 어려 아직 성장 중인 사람을 이르는 말.' } },
+            { en: 'boy', sub: 'Family & People', emoji: '👦', hints: { 하: '남자아이', 중: '어린 남자를 부르는 말이에요.', 상: '아직 어른이 되지 않은 남자아이를 이르는 말.' } },
+            { en: 'girl', sub: 'Family & People', emoji: '👧', hints: { 하: '여자아이', 중: '어린 여자를 부르는 말이에요.', 상: '아직 어른이 되지 않은 여자아이를 이르는 말.' } },
+            { en: 'man', sub: 'Family & People', emoji: '👨', hints: { 하: '남자', 중: '어른이 된 남성을 부르는 말이에요.', 상: '성인이 된 남성을 이르는 말.' } },
+            { en: 'woman', sub: 'Family & People', emoji: '👩', hints: { 하: '여자', 중: '어른이 된 여성을 부르는 말이에요.', 상: '성인이 된 여성을 이르는 말.' } },
+
+            { en: 'elephant', sub: 'Animal', emoji: '🐘', hints: { 하: '코끼리', 중: '코가 아주 길고 몸집이 큰 동물이에요.', 상: '긴 코와 큰 귀, 상아를 가진 육지에서 가장 큰 동물.' } },
+            { en: 'fish', sub: 'Animal', emoji: '🐟', hints: { 하: '물고기', 중: '물속에서 아가미로 숨을 쉬며 사는 동물이에요.', 상: '지느러미와 아가미가 있어 물속에서 헤엄치며 사는 동물.' } },
+            { en: 'fox', sub: 'Animal', emoji: '🦊', hints: { 하: '여우', 중: '꼬리가 크고 영리한 동물이에요.', 상: '뾰족한 얼굴과 큰 꼬리를 가진, 개와 비슷하게 생긴 영리한 동물.' } },
+            { en: 'frog', sub: 'Animal', emoji: '🐸', hints: { 하: '개구리', 중: '연못이나 논에 살며 폴짝폴짝 뛰는 동물이에요.', 상: '물과 땅을 오가며 살고, 뒷다리로 멀리 뛰어오르는 양서류.' } },
+            { en: 'giraffe', sub: 'Animal', emoji: '🦒', hints: { 하: '기린', 중: '목이 아주 긴 동물이에요.', 상: '아주 긴 목과 다리를 가진, 나무 꼭대기의 잎을 먹는 동물.' } },
+            { en: 'horse', sub: 'Animal', emoji: '🐴', hints: { 하: '말', 중: '사람을 태우고 빨리 달리는 동물이에요.', 상: '갈기와 긴 다리를 가진, 사람을 태우거나 짐을 나르는 데 쓰이는 동물.' } },
+            { en: 'kangaroo', sub: 'Animal', emoji: '🦘', hints: { 하: '캥거루', 중: '배에 주머니가 있고 폴짝폴짝 뛰는 동물이에요.', 상: '배에 새끼를 넣는 주머니가 있고, 큰 뒷다리로 뛰어다니는 호주의 동물.' } },
+            { en: 'lion', sub: 'Animal', emoji: '🦁', hints: { 하: '사자', 중: '갈기가 있고 초원의 왕이라 불리는 동물이에요.', 상: '수컷의 목에 갈기가 있으며, 무리를 지어 사는 사나운 육식 동물.' } },
+            { en: 'monkey', sub: 'Animal', emoji: '🐒', hints: { 하: '원숭이', 중: '나무를 잘 타고 사람과 닮은 동물이에요.', 상: '손과 발을 이용해 나무를 잘 타는, 사람과 생김새가 닮은 동물.' } },
+            { en: 'mouse', sub: 'Animal', emoji: '🐭', hints: { 하: '쥐', 중: '몸집이 작고 구멍에 사는 동물이에요.', 상: '몸집이 작고 이빨이 발달한, 곡식이나 음식을 갉아 먹는 동물.' } },
+            { en: 'octopus', sub: 'Animal', emoji: '🐙', hints: { 하: '문어', 중: '다리가 여덟 개인 바다 동물이에요.', 상: '몸이 부드럽고 여덟 개의 다리에 빨판이 있는 바다 동물.' } },
+            { en: 'panda', sub: 'Animal', emoji: '🐼', hints: { 하: '판다', 중: '검은색과 흰색 털을 가진, 대나무를 먹는 동물이에요.', 상: '눈 주위와 몸통 일부가 검은, 대나무를 주로 먹는 곰과 동물.' } },
+            { en: 'pig', sub: 'Animal', emoji: '🐷', hints: { 하: '돼지', 중: '코가 납작하고 꿀꿀 소리를 내는 동물이에요.', 상: '몸이 통통하고 코가 납작하며, 농장에서 기르는 동물.' } },
+            { en: 'rabbit', sub: 'Animal', emoji: '🐰', hints: { 하: '토끼', 중: '귀가 길고 깡충깡충 뛰는 동물이에요.', 상: '길고 쫑긋한 귀와 짧은 꼬리를 가진, 빠르게 뛰어다니는 동물.' } },
+            { en: 'shark', sub: 'Animal', emoji: '🦈', hints: { 하: '상어', 중: '이빨이 날카로운 큰 바닷물고기예요.', 상: '날카로운 이빨과 지느러미를 가진, 바다에서 사는 큰 육식 물고기.' } },
+            { en: 'sheep', sub: 'Animal', emoji: '🐑', hints: { 하: '양', 중: '털이 곱슬곱슬한 동물이에요.', 상: '부드럽고 곱슬곱슬한 털을 가진, 목장에서 기르는 온순한 동물.' } },
+            { en: 'tiger', sub: 'Animal', emoji: '🐯', hints: { 하: '호랑이', 중: '줄무늬가 있는 힘센 동물이에요.', 상: '노란 몸에 검은 줄무늬가 있는, 숲에 사는 힘세고 사나운 동물.' } },
+            { en: 'zebra', sub: 'Animal', emoji: '🦓', hints: { 하: '얼룩말', 중: '검은색과 흰색 줄무늬가 있는 동물이에요.', 상: '온몸에 검은색과 흰색 줄무늬가 있는, 말과 비슷하게 생긴 동물.' } }
+        ];
+        pushWordsToBank('사람과 동물', peopleAnimalWords);
+
+        /* --- 취미·과목·직업 --- */
+        const hobbySubjectJobWords = [
+            { en: 'taekwondo', sub: 'Sports & Hobby', emoji: '🥋', hints: { 하: '태권도', 중: '손과 발을 이용하는 우리나라 전통 무술이에요.', 상: '손과 발 기술을 이용해 상대를 공격하고 방어하는 한국 고유의 무술.' } },
+            { en: 'swimming', sub: 'Sports & Hobby', emoji: '🏊', hints: { 하: '수영', 중: '물속에서 팔다리를 움직여 헤엄치는 운동이에요.', 상: '물속에서 팔과 다리를 이용해 몸을 움직이며 나아가는 운동.' } },
+            { en: 'skating', sub: 'Sports & Hobby', emoji: '⛸️', hints: { 하: '스케이트', 중: '얼음판 위에서 미끄러지며 타는 운동이에요.', 상: '날이 달린 신발을 신고 얼음 위를 미끄러지듯 타는 운동.' } },
+            { en: 'skiing', sub: 'Sports & Hobby', emoji: '⛷️', hints: { 하: '스키', 중: '눈 쌓인 산에서 긴 널빤지를 타고 내려오는 운동이에요.', 상: '눈 위에서 긴 판 모양의 도구를 신고 미끄러져 내려오는 겨울 운동.' } },
+            { en: 'camping', sub: 'Sports & Hobby', emoji: '🏕️', hints: { 하: '캠핑, 야영', 중: '텐트를 치고 야외에서 지내는 활동이에요.', 상: '자연 속에서 텐트를 치고 머무르며 즐기는 야외 활동.' } },
+            { en: 'hiking', sub: 'Sports & Hobby', emoji: '🥾', hints: { 하: '등산', 중: '산이나 언덕을 걸어서 올라가는 활동이에요.', 상: '산이나 들길을 걸으며 자연을 즐기는 야외 활동.' } },
+            { en: 'drawing', sub: 'Sports & Hobby', emoji: '✏️', hints: { 하: '그림 그리기', 중: '연필이나 펜으로 그림을 그리는 활동이에요.', 상: '선을 이용해 연필, 펜 등으로 사물이나 생각을 종이에 나타내는 활동.' } },
+            { en: 'painting', sub: 'Sports & Hobby', emoji: '🎨', hints: { 하: '색칠하기, 그림 그리기', 중: '물감을 이용해 그림을 그리는 활동이에요.', 상: '물감이나 색을 이용해 화면 위에 그림을 그려 표현하는 활동.' } },
+            { en: 'cooking', sub: 'Sports & Hobby', emoji: '🍳', hints: { 하: '요리', 중: '재료로 음식을 만드는 활동이에요.', 상: '여러 재료를 손질하고 익혀 먹을 수 있는 음식을 만드는 활동.' } },
+            { en: 'picnic', sub: 'Sports & Hobby', emoji: '🧺', hints: { 하: '소풍, 피크닉', 중: '도시락을 싸서 야외로 놀러 가는 것이에요.', 상: '음식을 준비해서 공원이나 야외로 나가 즐기는 나들이.' } },
+
+            { en: 'Music', sub: 'Subject & Class', emoji: '🎵', hints: { 하: '음악', 중: '노래를 부르거나 악기를 배우는 과목이에요.', 상: '노래, 악기 연주 등 소리와 리듬을 다루는 것을 배우는 교과목.' } },
+            { en: 'P.E.', sub: 'Subject & Class', emoji: '🏃', hints: { 하: '체육', 중: '몸을 움직이고 운동하는 것을 배우는 과목이에요.', 상: '여러 운동과 신체 활동을 통해 건강과 체력을 기르는 교과목.' } },
+            { en: 'subject', sub: 'Subject & Class', emoji: '📚', hints: { 하: '과목', 중: '학교에서 배우는 국어, 수학 같은 것을 부르는 말이에요.', 상: '학교에서 학년별로 나누어 가르치고 배우는 지식의 영역.' } },
+            { en: 'class', sub: 'Subject & Class', emoji: '🏫', hints: { 하: '수업, 학급', 중: '선생님이 학생들을 가르치는 시간이나 반이에요.', 상: '정해진 시간에 선생님이 학생들에게 지식을 가르치는 시간, 또는 그 무리.' } },
+            { en: 'lesson', sub: 'Subject & Class', emoji: '📖', hints: { 하: '수업, 단원', 중: '한 번에 배우는 공부의 내용이에요.', 상: '교과서에서 한 부분씩 나누어 배우는 학습 내용.' } },
+            { en: 'homework', sub: 'Subject & Class', emoji: '📝', hints: { 하: '숙제', 중: '집에서 해 와야 하는 학교 공부예요.', 상: '학교에서 배운 내용을 집에서 복습하도록 내주는 과제.' } },
+            { en: 'test', sub: 'Subject & Class', emoji: '📄', hints: { 하: '시험', 중: '얼마나 알고 있는지 확인하는 것이에요.', 상: '배운 내용을 얼마나 이해했는지 문제를 풀어 확인하는 활동.' } },
+            { en: 'vacation', sub: 'Subject & Class', emoji: '🏖️', hints: { 하: '방학', 중: '학교에 가지 않고 쉬는 기간이에요.', 상: '학기와 학기 사이에 학교 수업 없이 쉬는 긴 기간.' } },
+            { en: 'grade', sub: 'Subject & Class', emoji: '🏅', hints: { 하: '학년, 성적', 중: '몇 학년인지 또는 시험 점수를 나타내는 말이에요.', 상: '학교에서 학생의 단계를 나타내거나, 시험 결과를 평가한 점수.' } },
+
+            { en: 'teacher', sub: 'Job', emoji: '👩‍🏫', hints: { 하: '선생님', 중: '학생들을 가르치는 사람이에요.', 상: '학교나 학원에서 학생들에게 지식과 기술을 가르치는 직업.' } },
+            { en: 'actor', sub: 'Job', emoji: '🎭', hints: { 하: '배우', 중: '영화나 연극에서 연기를 하는 사람이에요.', 상: '영화, 드라마, 연극 등에서 등장인물을 연기하는 직업.' } },
+            { en: 'scientist', sub: 'Job', emoji: '🔬', hints: { 하: '과학자', 중: '과학을 연구하는 사람이에요.', 상: '자연 현상을 관찰하고 실험하여 새로운 사실을 밝혀내는 직업.' } },
+            { en: 'photographer', sub: 'Job', emoji: '📷', hints: { 하: '사진사', 중: '사진을 찍는 것이 직업인 사람이에요.', 상: '카메라를 이용해 사람이나 풍경 등을 사진으로 남기는 직업.' } },
+            { en: 'firefighter', sub: 'Job', emoji: '👨‍🚒', hints: { 하: '소방관', 중: '불을 끄고 사람을 구하는 사람이에요.', 상: '화재를 진압하고 위험에 처한 사람을 구조하는 직업.' } },
+            { en: 'police officer', sub: 'Job', emoji: '👮', hints: { 하: '경찰관', 중: '나쁜 사람을 잡고 시민을 지키는 사람이에요.', 상: '법을 지키게 하고 시민의 안전을 지키는 일을 하는 직업.' } },
+            { en: 'writer', sub: 'Job', emoji: '✍️', hints: { 하: '작가', 중: '책이나 글을 쓰는 사람이에요.', 상: '소설, 시, 기사 등 글을 창작하는 것을 직업으로 하는 사람.' } },
+            { en: 'dentist', sub: 'Job', emoji: '🦷', hints: { 하: '치과의사', 중: '이가 아플 때 치료해 주는 사람이에요.', 상: '이와 잇몸 등 구강 질환을 진료하고 치료하는 의사.' } },
+            { en: 'zookeeper', sub: 'Job', emoji: '🦓', hints: { 하: '동물원 사육사', 중: '동물원에서 동물을 돌보는 사람이에요.', 상: '동물원에서 동물들에게 먹이를 주고 건강을 돌보는 직업.' } },
+            { en: 'designer', sub: 'Job', emoji: '✏️', hints: { 하: '디자이너', 중: '옷이나 물건을 예쁘게 꾸미는 것을 만드는 사람이에요.', 상: '옷, 제품, 건축물 등의 모양과 스타일을 계획하고 만드는 직업.' } },
+            { en: 'astronaut', sub: 'Job', emoji: '👨‍🚀', hints: { 하: '우주비행사', 중: '우주선을 타고 우주로 가는 사람이에요.', 상: '우주선을 타고 우주로 나가 임무를 수행하는 직업.' } },
+            { en: 'farmer', sub: 'Job', emoji: '🧑‍🌾', hints: { 하: '농부', 중: '농사를 짓는 사람이에요.', 상: '논밭을 가꾸어 곡식이나 채소, 과일 등을 기르는 직업.' } },
+            { en: 'driver', sub: 'Job', emoji: '🚗', hints: { 하: '운전기사', 중: '차를 운전하는 사람이에요.', 상: '자동차, 버스, 택시 등을 운전하는 것을 직업으로 하는 사람.' } }
+        ];
+        pushWordsToBank('취미·과목·직업', hobbySubjectJobWords);
+
+        /* --- 음식과 음료 --- */
+        const foodDrinkWords = [
+            { en: 'strawberry', sub: 'Fruit & Vegetable', emoji: '🍓', hints: { 하: '딸기', 중: '빨갛고 씨가 겉에 박힌 새콤달콤한 과일이에요.', 상: '겉면에 작은 씨가 박혀 있는, 빨갛고 새콤달콤한 봄철 과일.' } },
+            { en: 'peach', sub: 'Fruit & Vegetable', emoji: '🍑', hints: { 하: '복숭아', 중: '겉에 솜털이 있고 향이 좋은 여름 과일이에요.', 상: '분홍빛 껍질에 솜털이 있고, 과즙이 많고 달콤한 여름 과일.' } },
+            { en: 'pear', sub: 'Fruit & Vegetable', emoji: '🍐', hints: { 하: '배', 중: '아삭하고 즙이 많은 노란빛 과일이에요.', 상: '둥글고 아랫부분이 볼록하며, 즙이 많고 아삭한 가을 과일.' } },
+            { en: 'melon', sub: 'Fruit & Vegetable', emoji: '🍈', hints: { 하: '멜론', 중: '겉에 그물무늬가 있는 달콤한 과일이에요.', 상: '겉면에 그물 모양 무늬가 있고 속이 연둣빛인 달콤한 과일.' } },
+            { en: 'potato', sub: 'Fruit & Vegetable', emoji: '🥔', hints: { 하: '감자', 중: '땅속에서 자라는 동글동글한 채소예요.', 상: '땅속 줄기에서 자라는 갈색 껍질의 둥근 채소로, 삶거나 튀겨 먹음.' } },
+            { en: 'tomato', sub: 'Fruit & Vegetable', emoji: '🍅', hints: { 하: '토마토', 중: '빨갛고 둥근 채소예요.', 상: '빨갛고 둥글며 즙이 많은, 과일처럼 먹기도 하는 채소.' } },
+            { en: 'carrot', sub: 'Fruit & Vegetable', emoji: '🥕', hints: { 하: '당근', 중: '주황색의 길쭉한 뿌리채소예요.', 상: '땅속에서 자라는 주황색 뿌리채소로, 토끼가 좋아하는 채소로 유명함.' } },
+            { en: 'corn', sub: 'Fruit & Vegetable', emoji: '🌽', hints: { 하: '옥수수', 중: '노란 알갱이가 촘촘히 박힌 곡식이에요.', 상: '길쭉한 자루에 노란 알갱이가 촘촘하게 박혀 있는 곡식.' } },
+            { en: 'onion', sub: 'Fruit & Vegetable', emoji: '🧅', hints: { 하: '양파', 중: '까면 매운 냄새가 나는 둥근 채소예요.', 상: '여러 겹으로 이루어져 있고, 자르면 매운 냄새가 나는 둥근 채소.' } },
+
+            { en: 'cookie', sub: 'Meal & Snack', emoji: '🍪', hints: { 하: '과자, 쿠키', 중: '밀가루와 설탕으로 만든 바삭한 간식이에요.', 상: '밀가루, 버터, 설탕 등을 섞어 구운, 바삭한 간식용 빵.' } },
+            { en: 'hamburger', sub: 'Meal & Snack', emoji: '🍔', hints: { 하: '햄버거', 중: '빵 사이에 고기와 채소를 넣은 음식이에요.', 상: '둥근 빵 사이에 고기 패티와 채소를 끼워 넣은 음식.' } },
+            { en: 'pizza', sub: 'Meal & Snack', emoji: '🍕', hints: { 하: '피자', 중: '동그랗고 넓은 반죽에 치즈를 올린 음식이에요.', 상: '얇은 반죽 위에 토마토소스, 치즈, 여러 재료를 올려 구운 음식.' } },
+            { en: 'salad', sub: 'Meal & Snack', emoji: '🥗', hints: { 하: '샐러드', 중: '채소를 여러 가지 섞어 만든 음식이에요.', 상: '신선한 채소나 과일을 소스와 함께 버무려 먹는 음식.' } },
+            { en: 'sandwich', sub: 'Meal & Snack', emoji: '🥪', hints: { 하: '샌드위치', 중: '빵 사이에 여러 재료를 끼운 음식이에요.', 상: '두 장의 빵 사이에 채소, 고기, 치즈 등을 끼워 만든 음식.' } },
+            { en: 'spaghetti', sub: 'Meal & Snack', emoji: '🍝', hints: { 하: '스파게티', 중: '길고 가느다란 면을 소스에 비빈 음식이에요.', 상: '길고 가느다란 파스타 면을 토마토소스 등과 함께 먹는 이탈리아 음식.' } },
+            { en: 'steak', sub: 'Meal & Snack', emoji: '🥩', hints: { 하: '스테이크', 중: '두툼하게 구운 고기 요리예요.', 상: '두꺼운 고깃덩어리를 굽거나 익혀서 만든 서양식 고기 요리.' } },
+            { en: 'egg', sub: 'Meal & Snack', emoji: '🥚', hints: { 하: '달걀, 계란', 중: '닭이 낳는, 껍질이 있는 타원형 식품이에요.', 상: '닭 등의 새가 낳는, 단단한 껍질로 둘러싸인 타원형 식재료.' } },
+            { en: 'soup', sub: 'Meal & Snack', emoji: '🍲', hints: { 하: '수프, 국', 중: '재료를 넣고 끓인 국물 음식이에요.', 상: '채소나 고기 등을 넣고 오래 끓여 국물을 낸 음식.' } },
+            { en: 'meat', sub: 'Meal & Snack', emoji: '🍖', hints: { 하: '고기', 중: '동물에게서 얻는 살코기예요.', 상: '소, 돼지, 닭 등 동물의 살로 이루어진 식재료.' } },
+            { en: 'noodles', sub: 'Meal & Snack', emoji: '🍜', hints: { 하: '국수, 면', 중: '가늘고 길게 뽑은 밀가루 음식이에요.', 상: '밀가루 반죽을 가늘고 길게 뽑아 삶아 먹는 음식.' } },
+            { en: 'candy', sub: 'Meal & Snack', emoji: '🍬', hints: { 하: '사탕', 중: '달콤하고 딱딱한 간식이에요.', 상: '설탕을 녹여 굳혀 만든, 달콤한 맛이 나는 간식.' } },
+
+            { en: 'sweet', sub: 'Drink & Taste', emoji: '🍯', hints: { 하: '단, 달콤한', 중: '설탕이나 꿀처럼 달콤한 맛을 나타내는 말이에요.', 상: '설탕이나 꿀에서 느껴지는 것과 같은 달콤한 맛을 표현하는 말.' } },
+            { en: 'salty', sub: 'Drink & Taste', emoji: '🧂', hints: { 하: '짠', 중: '소금과 같이 짠맛이 나는 것을 뜻해요.', 상: '소금에서 느껴지는 것과 같은 짠맛을 표현하는 말.' } },
+            { en: 'sour', sub: 'Drink & Taste', emoji: '🍋', hints: { 하: '신, 시큼한', 중: '레몬처럼 새콤한 맛을 나타내는 말이에요.', 상: '레몬이나 식초에서 느껴지는 것과 같은 신맛을 표현하는 말.' } },
+            { en: 'bitter', sub: 'Drink & Taste', emoji: '☕', hints: { 하: '쓴', 중: '커피나 약처럼 쓴맛이 나는 것을 뜻해요.', 상: '한약이나 진한 커피처럼 혀에 쓰게 느껴지는 맛을 표현하는 말.' } },
+            { en: 'spicy', sub: 'Drink & Taste', emoji: '🌶️', hints: { 하: '매운', 중: '고추처럼 입안이 얼얼한 맛을 나타내는 말이에요.', 상: '고추나 후추처럼 입 안이 얼얼하고 뜨겁게 느껴지는 맛을 표현하는 말.' } },
+            { en: 'sugar', sub: 'Drink & Taste', emoji: '🍬', hints: { 하: '설탕', 중: '음식을 달게 만드는 하얀 가루예요.', 상: '사탕수수나 사탕무에서 뽑아낸, 단맛을 내는 흰색 가루.' } },
+            { en: 'salt', sub: 'Drink & Taste', emoji: '🧂', hints: { 하: '소금', 중: '음식을 짜게 만드는 하얀 알갱이예요.', 상: '바닷물을 증발시켜 얻는, 짠맛을 내는 흰색 결정.' } },
+            { en: 'taste', sub: 'Drink & Taste', emoji: '👅', hints: { 하: '맛', 중: '음식을 먹을 때 혀로 느끼는 느낌이에요.', 상: '음식을 먹었을 때 혀로 느껴지는 단맛, 짠맛 등의 감각.' } },
+            { en: 'delicious', sub: 'Drink & Taste', emoji: '😋', hints: { 하: '맛있는', 중: '음식이 맛있다는 것을 나타내는 말이에요.', 상: '음식의 맛이 매우 좋다는 것을 표현하는 말.' } }
+        ];
+        pushWordsToBank('음식과 음료', foodDrinkWords);
+
+        /* --- 국가와 자연 --- */
+        const countryNatureWeatherWords = [
+            { en: 'Thailand', sub: 'Country', emoji: '🇹🇭', hints: { 하: '태국', 중: '동남아시아에 있는 나라예요.', 상: '동남아시아에 위치한 나라로, 수도는 방콕이며 사원과 열대 과일로 유명함.' } },
+            { en: 'India', sub: 'Country', emoji: '🇮🇳', hints: { 하: '인도', 중: '아시아 남쪽에 있는 인구가 아주 많은 나라예요.', 상: '남아시아에 위치한 나라로, 타지마할과 카레로 잘 알려짐.' } },
+            { en: 'Italy', sub: 'Country', emoji: '🇮🇹', hints: { 하: '이탈리아', 중: '유럽에 있는, 피자와 파스타로 유명한 나라예요.', 상: '유럽 남부에 위치한 나라로, 로마와 피자·파스타 등의 음식으로 유명함.' } },
+            { en: 'France', sub: 'Country', emoji: '🇫🇷', hints: { 하: '프랑스', 중: '유럽에 있는, 에펠탑으로 유명한 나라예요.', 상: '유럽 서부에 위치한 나라로, 수도는 파리이며 에펠탑으로 유명함.' } },
+            { en: 'Spain', sub: 'Country', emoji: '🇪🇸', hints: { 하: '스페인', 중: '유럽에 있는, 축구로 유명한 나라예요.', 상: '유럽 남서부에 위치한 나라로, 수도는 마드리드이며 축구와 투우로 유명함.' } },
+            { en: 'Germany', sub: 'Country', emoji: '🇩🇪', hints: { 하: '독일', 중: '유럽에 있는, 자동차로 유명한 나라예요.', 상: '유럽 중부에 위치한 나라로, 자동차 산업과 맥주로 유명함.' } },
+            { en: 'Sweden', sub: 'Country', emoji: '🇸🇪', hints: { 하: '스웨덴', 중: '유럽 북쪽에 있는 나라예요.', 상: '북유럽 스칸디나비아반도에 위치한 나라로, 겨울이 길고 눈이 많음.' } },
+            { en: 'Canada', sub: 'Country', emoji: '🇨🇦', hints: { 하: '캐나다', 중: '북아메리카에 있는, 단풍잎으로 유명한 나라예요.', 상: '북아메리카 북부에 위치한 나라로, 국기에 단풍잎이 그려져 있음.' } },
+            { en: 'Mexico', sub: 'Country', emoji: '🇲🇽', hints: { 하: '멕시코', 중: '북아메리카 남쪽에 있는, 매운 음식으로 유명한 나라예요.', 상: '북아메리카에 위치한 나라로, 타코 등 매콤한 음식으로 유명함.' } },
+            { en: 'Argentina', sub: 'Country', emoji: '🇦🇷', hints: { 하: '아르헨티나', 중: '남아메리카에 있는, 축구로 유명한 나라예요.', 상: '남아메리카 남부에 위치한 나라로, 탱고와 축구로 유명함.' } },
+            { en: 'Brazil', sub: 'Country', emoji: '🇧🇷', hints: { 하: '브라질', 중: '남아메리카에서 가장 큰 나라예요.', 상: '남아메리카에 위치한 나라로, 아마존 밀림과 축구로 유명함.' } },
+            { en: 'Australia', sub: 'Country', emoji: '🇦🇺', hints: { 하: '호주', 중: '캥거루가 사는 나라예요.', 상: '남반구에 위치한 대륙 크기의 나라로, 캥거루와 코알라로 유명함.' } },
+
+            { en: 'river', sub: 'Nature', emoji: '🏞️', hints: { 하: '강', 중: '넓고 길게 흐르는 물줄기예요.', 상: '높은 곳에서 낮은 곳으로 길게 흘러 바다로 이어지는 큰 물줄기.' } },
+            { en: 'sea', sub: 'Nature', emoji: '🌊', hints: { 하: '바다', 중: '짠물이 넓게 펼쳐진 곳이에요.', 상: '육지를 둘러싸고 있는, 짠물로 이루어진 넓은 물의 공간.' } },
+            { en: 'beach', sub: 'Nature', emoji: '🏖️', hints: { 하: '해변, 바닷가', 중: '모래가 있는 바다 근처의 땅이에요.', 상: '바다와 맞닿아 있는, 모래나 자갈로 이루어진 땅.' } },
+            { en: 'lake', sub: 'Nature', emoji: '🏞️', hints: { 하: '호수', 중: '육지 안에 넓게 고여 있는 물이에요.', 상: '육지로 둘러싸여 있으며 넓고 깊게 물이 고여 있는 곳.' } },
+            { en: 'grass', sub: 'Nature', emoji: '🌱', hints: { 하: '풀, 잔디', 중: '땅에서 자라는 초록색 식물이에요.', 상: '땅을 뒤덮으며 자라는 짧고 가느다란 초록색 식물.' } },
+            { en: 'sky', sub: 'Nature', emoji: '🌌', hints: { 하: '하늘', 중: '땅 위 높은 곳에 펼쳐진 공간이에요.', 상: '땅 위를 덮고 있는, 해와 달과 별이 보이는 넓은 공간.' } },
+            { en: 'star', sub: 'Nature', emoji: '⭐', hints: { 하: '별', 중: '밤하늘에 반짝이는 것이에요.', 상: '밤하늘에서 스스로 빛을 내며 반짝이는 천체.' } },
+            { en: 'sun', sub: 'Nature', emoji: '☀️', hints: { 하: '해, 태양', 중: '낮에 하늘에서 밝게 빛나는 것이에요.', 상: '태양계의 중심에 있으며 스스로 빛과 열을 내는 별.' } },
+            { en: 'moon', sub: 'Nature', emoji: '🌙', hints: { 하: '달', 중: '밤하늘에 뜨는 둥근 것이에요.', 상: '지구 주위를 도는 천체로, 밤하늘에서 빛을 반사해 밝게 보임.' } },
+            { en: 'space', sub: 'Nature', emoji: '🌌', hints: { 하: '우주', 중: '별과 행성이 있는 아주 넓은 공간이에요.', 상: '지구 대기권 밖의, 별과 행성들이 존재하는 끝없이 넓은 공간.' } },
+            { en: 'air', sub: 'Nature', emoji: '💨', hints: { 하: '공기', 중: '눈에 보이지 않지만 숨 쉴 때 마시는 것이에요.', 상: '지구를 둘러싸고 있는, 사람과 동물이 숨을 쉬는 데 필요한 기체.' } },
+            { en: 'sand', sub: 'Nature', emoji: '🏖️', hints: { 하: '모래', 중: '바닷가나 사막에 있는 작은 알갱이예요.', 상: '돌이 잘게 부서져 만들어진, 바닷가나 사막에 많은 작은 알갱이.' } },
+            { en: 'rose', sub: 'Nature', emoji: '🌹', hints: { 하: '장미', 중: '가시가 있고 향기로운 꽃이에요.', 상: '줄기에 가시가 있으며 향이 좋아 사랑을 상징하는 꽃.' } },
+
+            { en: 'windy', sub: 'Weather', emoji: '🌬️', hints: { 하: '바람이 부는', 중: '바람이 많이 부는 날씨를 나타내는 말이에요.', 상: '공기가 세게 움직여 바람이 강하게 부는 날씨를 표현하는 말.' } },
+            { en: 'foggy', sub: 'Weather', emoji: '🌫️', hints: { 하: '안개 낀', 중: '뿌옇게 안개가 낀 날씨를 나타내는 말이에요.', 상: '작은 물방울이 공기 중에 떠 있어 시야가 뿌옇게 흐린 날씨를 표현하는 말.' } },
+            { en: 'lightning', sub: 'Weather', emoji: '⚡', hints: { 하: '번개', 중: '하늘에서 번쩍이는 빛이에요.', 상: '먹구름 속에서 전기가 흐르며 하늘에 번쩍이는 빛이 나타나는 현상.' } },
+            { en: 'storm', sub: 'Weather', emoji: '⛈️', hints: { 하: '폭풍', 중: '비바람이 세차게 몰아치는 날씨예요.', 상: '강한 바람과 비, 천둥·번개가 함께 몰아치는 거친 날씨.' } },
+            { en: 'snowman', sub: 'Weather', emoji: '⛄', hints: { 하: '눈사람', 중: '눈을 뭉쳐서 사람 모양으로 만든 것이에요.', 상: '쌓인 눈을 뭉쳐 사람 모양으로 만들어 놓은 것.' } },
+            { en: 'ice', sub: 'Weather', emoji: '🧊', hints: { 하: '얼음', 중: '물이 아주 차가워져서 단단해진 것이에요.', 상: '물이 0도 이하로 얼어붙어 단단하게 굳은 것.' } },
+            { en: 'snow', sub: 'Weather', emoji: '❄️', hints: { 하: '눈', 중: '겨울에 하늘에서 하얗게 내리는 것이에요.', 상: '수증기가 얼어서 하얀 결정체로 하늘에서 내리는 겨울철 강수.' } },
+            { en: 'rain', sub: 'Weather', emoji: '🌧️', hints: { 하: '비', 중: '구름에서 물방울이 떨어지는 것이에요.', 상: '구름 속 수증기가 물방울이 되어 땅으로 떨어지는 현상.' } },
+            { en: 'wind', sub: 'Weather', emoji: '💨', hints: { 하: '바람', 중: '공기가 움직여서 느껴지는 것이에요.', 상: '기압 차이로 공기가 이동하면서 생기는 흐름.' } },
+            { en: 'hot', sub: 'Weather', emoji: '🥵', hints: { 하: '더운, 뜨거운', 중: '온도가 높아서 덥게 느껴지는 것이에요.', 상: '기온이나 온도가 매우 높아 덥게 느껴지는 상태를 표현하는 말.' } },
+            { en: 'cold', sub: 'Weather', emoji: '🥶', hints: { 하: '추운, 차가운', 중: '온도가 낮아서 춥게 느껴지는 것이에요.', 상: '기온이나 온도가 매우 낮아 춥게 느껴지는 상태를 표현하는 말.' } },
+            { en: 'cool', sub: 'Weather', emoji: '😎', hints: { 하: '시원한', 중: '적당히 차가워서 상쾌하게 느껴지는 것이에요.', 상: '덥지도 춥지도 않고 약간 서늘해 상쾌하게 느껴지는 상태를 표현하는 말.' } },
+            { en: 'warm', sub: 'Weather', emoji: '🌤️', hints: { 하: '따뜻한', 중: '적당히 뜨거워서 기분 좋게 느껴지는 것이에요.', 상: '차갑지 않고 기분 좋을 정도로 온도가 알맞게 높은 상태를 표현하는 말.' } },
+            { en: 'dry', sub: 'Weather', emoji: '🏜️', hints: { 하: '건조한, 마른', 중: '물기가 없이 마른 상태를 나타내는 말이에요.', 상: '습기나 물기가 거의 없이 바짝 마른 상태를 표현하는 말.' } }
+        ];
+        pushWordsToBank('국가와 자연', countryNatureWeatherWords);
+
+        /* --- 장소·교통·방향 --- */
+        const placeTransportDirectionWords = [
+            { en: 'hospital', sub: 'Place', emoji: '🏥', hints: { 하: '병원', 중: '아플 때 치료를 받으러 가는 곳이에요.', 상: '의사가 아픈 사람을 진찰하고 치료해 주는 시설.' } },
+            { en: 'library', sub: 'Place', emoji: '📚', hints: { 하: '도서관', 중: '책을 읽거나 빌리는 곳이에요.', 상: '여러 책을 모아 두고 사람들이 읽거나 빌릴 수 있게 한 시설.' } },
+            { en: 'park', sub: 'Place', emoji: '🌳', hints: { 하: '공원', 중: '나무와 놀이터가 있는 쉬는 곳이에요.', 상: '사람들이 쉬거나 운동할 수 있도록 나무와 시설을 갖춘 공공장소.' } },
+            { en: 'school', sub: 'Place', emoji: '🏫', hints: { 하: '학교', 중: '공부를 배우러 가는 곳이에요.', 상: '학생들이 모여 여러 과목을 배우는 교육 기관.' } },
+            { en: 'museum', sub: 'Place', emoji: '🏛️', hints: { 하: '박물관', 중: '옛날 물건이나 예술품을 구경하는 곳이에요.', 상: '역사적 유물이나 예술 작품을 모아 전시하는 시설.' } },
+            { en: 'airport', sub: 'Place', emoji: '✈️', hints: { 하: '공항', 중: '비행기를 타고 내리는 곳이에요.', 상: '비행기가 뜨고 내리며, 승객이 타고 내리는 시설을 갖춘 곳.' } },
+            { en: 'church', sub: 'Place', emoji: '⛪', hints: { 하: '교회', 중: '기독교인이 예배를 드리는 곳이에요.', 상: '기독교 신자들이 모여 예배를 드리는 건물.' } },
+            { en: 'police station', sub: 'Place', emoji: '🚓', hints: { 하: '경찰서', 중: '경찰관이 일하는 곳이에요.', 상: '경찰관들이 근무하며 사건을 처리하고 시민을 돕는 기관.' } },
+            { en: 'fire station', sub: 'Place', emoji: '🚒', hints: { 하: '소방서', 중: '소방관이 일하는 곳이에요.', 상: '소방관들이 대기하며 불이 나면 출동하는 기관.' } },
+            { en: 'zoo', sub: 'Place', emoji: '🦁', hints: { 하: '동물원', 중: '여러 동물을 모아 놓고 구경하는 곳이에요.', 상: '다양한 동물들을 기르며 사람들이 관람할 수 있게 한 시설.' } },
+            { en: 'living room', sub: 'Place', emoji: '🛋️', hints: { 하: '거실', 중: '가족이 함께 모여 쉬는 방이에요.', 상: '집 안에서 가족이 모여 함께 시간을 보내는 넓은 공간.' } },
+            { en: 'bedroom', sub: 'Place', emoji: '🛏️', hints: { 하: '침실', 중: '잠을 자는 방이에요.', 상: '침대가 있어 잠을 자거나 쉬는 데 쓰는 방.' } },
+            { en: 'bathroom', sub: 'Place', emoji: '🚿', hints: { 하: '욕실, 화장실', 중: '씻거나 볼일을 보는 방이에요.', 상: '몸을 씻거나 용변을 보는 시설이 있는 방.' } },
+            { en: 'kitchen', sub: 'Place', emoji: '🍳', hints: { 하: '부엌, 주방', 중: '음식을 만드는 방이에요.', 상: '음식을 조리하고 준비하는 데 쓰는 방.' } },
+            { en: 'garden', sub: 'Place', emoji: '🌷', hints: { 하: '정원', 중: '꽃과 나무를 가꾸는 곳이에요.', 상: '집 주변에 꽃, 나무, 채소 등을 심어 가꾸는 공간.' } },
+            { en: 'classroom', sub: 'Place', emoji: '🧑‍🏫', hints: { 하: '교실', 중: '학생들이 수업을 듣는 방이에요.', 상: '학교에서 학생들이 모여 수업을 받는 방.' } },
+            { en: 'playground', sub: 'Place', emoji: '🛝', hints: { 하: '놀이터', 중: '그네나 미끄럼틀이 있는 노는 곳이에요.', 상: '그네, 미끄럼틀 등이 있어 아이들이 놀 수 있게 만든 곳.' } },
+            { en: 'farm', sub: 'Place', emoji: '🚜', hints: { 하: '농장', 중: '농작물을 기르거나 가축을 키우는 곳이에요.', 상: '곡식이나 채소를 기르고 가축을 키우는 넓은 땅.' } },
+
+            { en: 'subway', sub: 'Transportation', emoji: '🚇', hints: { 하: '지하철', 중: '땅속 철길로 다니는 기차예요.', 상: '땅 밑에 놓인 철길을 따라 움직이는 대중교통 수단.' } },
+            { en: 'airplane', sub: 'Transportation', emoji: '✈️', hints: { 하: '비행기', 중: '하늘을 날아서 이동하는 큰 탈것이에요.', 상: '날개와 엔진을 이용해 하늘을 날아 사람이나 짐을 옮기는 탈것.' } },
+            { en: 'flight', sub: 'Transportation', emoji: '🛫', hints: { 하: '비행, 항공편', 중: '비행기를 타고 가는 여행이나 편을 뜻해요.', 상: '비행기를 이용해 하늘을 날아 이동하는 일이나 그 운항 편.' } },
+            { en: 'ship', sub: 'Transportation', emoji: '🚢', hints: { 하: '배, 선박', 중: '바다 위를 다니는 큰 탈것이에요.', 상: '물 위에 떠서 사람이나 화물을 싣고 이동하는 큰 탈것.' } },
+            { en: 'boat', sub: 'Transportation', emoji: '⛵', hints: { 하: '작은 배', 중: '강이나 바다에서 타는 작은 탈것이에요.', 상: '배보다 작은 크기로, 강이나 호수·바다에서 타는 탈것.' } },
+            { en: 'fire truck', sub: 'Transportation', emoji: '🚒', hints: { 하: '소방차', 중: '불을 끄러 가는 빨간색 차예요.', 상: '화재 현장에 출동해 불을 끄는 장비를 갖춘 특수 차량.' } },
+
+            { en: 'behind', sub: 'Direction & Position', emoji: '⬅️', hints: { 하: '뒤에', 중: '어떤 것의 뒤쪽에 있는 것을 나타내요.', 상: '어떤 대상의 뒤쪽 위치에 있음을 나타내는 말.' } },
+            { en: 'under', sub: 'Direction & Position', emoji: '⬇️', hints: { 하: '아래에', 중: '어떤 것의 밑에 있는 것을 나타내요.', 상: '어떤 대상보다 낮은 위치, 그 아래에 있음을 나타내는 말.' } },
+            { en: 'over', sub: 'Direction & Position', emoji: '⬆️', hints: { 하: '위에, 넘어서', 중: '어떤 것의 위쪽을 지나가는 것을 나타내요.', 상: '어떤 대상의 위쪽에 있거나 그것을 넘어가는 것을 나타내는 말.' } },
+            { en: 'top', sub: 'Direction & Position', emoji: '🔝', hints: { 하: '맨 위', 중: '가장 높은 부분을 뜻해요.', 상: '어떤 물체나 장소에서 가장 높은 부분을 가리키는 말.' } },
+            { en: 'bottom', sub: 'Direction & Position', emoji: '⬇️', hints: { 하: '맨 아래', 중: '가장 낮은 부분을 뜻해요.', 상: '어떤 물체나 장소에서 가장 낮은 부분을 가리키는 말.' } },
+            { en: 'middle', sub: 'Direction & Position', emoji: '↔️', hints: { 하: '가운데', 중: '양쪽에서 똑같이 떨어진 중심 부분이에요.', 상: '어떤 공간이나 물체의 양 끝에서 같은 거리에 있는 중심 부분.' } },
+            { en: 'near', sub: 'Direction & Position', emoji: '📍', hints: { 하: '가까이', 중: '거리가 멀지 않은 것을 나타내요.', 상: '어떤 대상과 거리가 멀지 않고 가깝게 있음을 나타내는 말.' } },
+            { en: 'next to', sub: 'Direction & Position', emoji: '➡️', hints: { 하: '바로 옆에', 중: '어떤 것의 바로 옆에 있는 것을 나타내요.', 상: '어떤 대상과 나란히 붙어서 바로 옆에 있음을 나타내는 말.' } },
+            { en: 'between', sub: 'Direction & Position', emoji: '↔️', hints: { 하: '사이에', 중: '두 개의 것 가운데에 있는 것을 나타내요.', 상: '두 대상의 중간 위치에 있음을 나타내는 말.' } },
+            { en: 'inside', sub: 'Direction & Position', emoji: '📦', hints: { 하: '안에', 중: '어떤 것의 속에 있는 것을 나타내요.', 상: '어떤 공간이나 물체의 내부에 있음을 나타내는 말.' } },
+            { en: 'outside', sub: 'Direction & Position', emoji: '🌳', hints: { 하: '밖에', 중: '어떤 것의 바깥에 있는 것을 나타내요.', 상: '어떤 공간이나 물체의 바깥쪽에 있음을 나타내는 말.' } },
+            { en: 'here', sub: 'Direction & Position', emoji: '📍', hints: { 하: '여기', 중: '말하는 사람이 있는 이곳을 가리켜요.', 상: '말하는 사람이 있는 바로 이 장소를 가리키는 말.' } },
+            { en: 'there', sub: 'Direction & Position', emoji: '📍', hints: { 하: '저기, 거기', 중: '말하는 사람에게서 떨어진 그곳을 가리켜요.', 상: '말하는 사람에게서 떨어져 있는 그 장소를 가리키는 말.' } },
+            { en: 'around', sub: 'Direction & Position', emoji: '🔄', hints: { 하: '주위에', 중: '어떤 것의 둘레를 뜻해요.', 상: '어떤 대상을 중심으로 그 둘레 전체를 나타내는 말.' } },
+            { en: 'corner', sub: 'Direction & Position', emoji: '📐', hints: { 하: '모퉁이, 구석', 중: '길이나 방이 꺾이는 부분이에요.', 상: '두 면이나 두 길이 만나 꺾이는 뾰족한 부분.' } }
+        ];
+        pushWordsToBank('장소·교통·방향', placeTransportDirectionWords);
+
+        /* --- 물건 --- */
+        const thingsWords = [
+            { en: 'ruler', sub: 'School Supplies', emoji: '📏', hints: { 하: '자', 중: '길이를 재거나 반듯한 선을 그을 때 쓰는 막대예요.', 상: '눈금이 새겨진 판 모양의 도구로, 길이를 측정하거나 직선을 그릴 때 사용하는 것.' } },
+            { en: 'scissors', sub: 'School Supplies', emoji: '✂️', hints: { 하: '가위', 중: '두 개의 날을 교차시켜 종이나 천을 자르는 도구예요.', 상: '두 개의 칼날이 하나의 축으로 연결되어 있어, 손잡이를 오므렸다 펼치며 물건을 자르는 도구.' } },
+            { en: 'glue stick', sub: 'School Supplies', emoji: '🧴', hints: { 하: '풀', 중: '종이를 붙일 때 문질러서 바르는 막대 모양 도구예요.', 상: '고체 형태의 접착제를 막대 모양 케이스에 담아, 돌려 올려 종이를 붙일 때 사용하는 학용품.' } },
+            { en: 'crayon', sub: 'School Supplies', emoji: '🖍️', hints: { 하: '크레파스', 중: '여러 색깔로 그림을 그릴 때 쓰는 막대 모양 재료예요.', 상: '안료와 왁스를 굳혀 막대 모양으로 만든 채색 도구.' } },
+            { en: 'board', sub: 'School Supplies', emoji: '📋', hints: { 하: '칠판', 중: '분필이나 마카로 글씨를 쓰는 넓고 평평한 판이에요.', 상: '교실 앞쪽에 걸려 있는 넓은 판으로, 선생님이 수업 내용을 적을 때 사용하는 것.' } },
+            { en: 'map', sub: 'School Supplies', emoji: '🗺️', hints: { 하: '지도', 중: '땅의 모양과 위치를 그림으로 나타낸 것이에요.', 상: '나라, 도시, 길 등의 위치와 모양을 일정한 형식으로 줄여 그린 그림.' } },
+            { en: 'paper', sub: 'School Supplies', emoji: '📄', hints: { 하: '종이', 중: '글씨를 쓰거나 그림을 그리는 얇고 넓은 것이에요.', 상: '나무 섬유 등으로 얇게 만들어, 글을 쓰거나 인쇄하는 데 쓰는 재료.' } },
+            { en: 'computer', sub: 'School Supplies', emoji: '💻', hints: { 하: '컴퓨터', 중: '화면을 보면서 다양한 작업을 할 수 있는 전자 기기예요.', 상: '정보를 입력, 저장, 처리하여 화면에 결과를 보여주는 전자 장치.' } },
+            { en: 'bag', sub: 'School Supplies', emoji: '👜', hints: { 하: '가방', 중: '물건을 넣어 들고 다니는 것이에요.', 상: '손잡이나 끈이 달려 있어, 물건을 넣어 들거나 메고 다니는 도구.' } },
+            { en: 'backpack', sub: 'School Supplies', emoji: '🎒', hints: { 하: '책가방', 중: '책이나 물건을 넣어 등에 메고 다니는 가방이에요.', 상: '양쪽 어깨끈으로 등에 메도록 만들어진 가방.' } },
+
+            { en: 'sofa', sub: 'Household', emoji: '🛋️', hints: { 하: '소파', 중: '여러 명이 편하게 앉을 수 있는 푹신한 의자예요.', 상: '등받이와 팔걸이가 있고 속을 푹신하게 채운, 거실에 두는 가구.' } },
+            { en: 'clock', sub: 'Household', emoji: '🕐', hints: { 하: '시계', 중: '지금 몇 시인지 알려주는 물건이에요.', 상: '바늘이나 숫자를 이용해 현재 시각을 표시해 주는 도구.' } },
+            { en: 'lamp', sub: 'Household', emoji: '💡', hints: { 하: '램프, 등', 중: '방 안을 밝게 비춰 주는 조명 기구예요.', 상: '전구나 불빛을 이용해 주변을 밝게 비춰 주는 조명 기구.' } },
+            { en: 'fan', sub: 'Household', emoji: '🪭', hints: { 하: '선풍기', 중: '날개를 돌려서 시원한 바람을 만들어 주는 기계예요.', 상: '전기의 힘으로 날개를 회전시켜 바람을 일으키는 기계.' } },
+            { en: 'mirror', sub: 'Household', emoji: '🪞', hints: { 하: '거울', 중: '내 모습을 비춰 보는 물건이에요.', 상: '빛을 반사시켜 사물이나 사람의 모습을 그대로 보여 주는 물건.' } },
+            { en: 'sink', sub: 'Household', emoji: '🚰', hints: { 하: '싱크대, 세면대', 중: '물을 틀어 손을 씻거나 설거지를 하는 곳이에요.', 상: '물을 받아 손을 씻거나 그릇을 닦을 수 있게 만든 시설.' } },
+            { en: 'stair', sub: 'Household', emoji: '🪜', hints: { 하: '계단', 중: '위아래 층을 오르내리는 층층이 된 길이에요.', 상: '높이가 다른 두 곳을 오르내릴 수 있도록 층층이 만든 시설.' } },
+            { en: 'towel', sub: 'Household', emoji: '🧻', hints: { 하: '수건', 중: '몸이나 물기를 닦는 천이에요.', 상: '물기를 흡수하도록 만들어져, 씻은 후 몸을 닦는 데 쓰는 천.' } },
+            { en: 'toothbrush', sub: 'Household', emoji: '🪥', hints: { 하: '칫솔', 중: '이를 닦을 때 쓰는 작은 솔이에요.', 상: '가는 털이 달린 손잡이로, 치약을 묻혀 이를 닦는 도구.' } },
+            { en: 'cup', sub: 'Household', emoji: '🥤', hints: { 하: '컵', 중: '물이나 음료를 담아 마시는 그릇이에요.', 상: '손잡이가 있거나 없는, 음료를 따라 마시는 작은 그릇.' } },
+            { en: 'plate', sub: 'Household', emoji: '🍽️', hints: { 하: '접시', 중: '음식을 담는 납작한 그릇이에요.', 상: '음식을 담아 먹을 수 있도록 만든 둥글고 납작한 그릇.' } },
+            { en: 'spoon', sub: 'Household', emoji: '🥄', hints: { 하: '숟가락', 중: '국물이나 밥을 떠먹는 도구예요.', 상: '오목한 부분으로 액체나 음식을 떠서 먹을 수 있게 만든 식기.' } },
+            { en: 'fork', sub: 'Household', emoji: '🍴', hints: { 하: '포크', 중: '음식을 찍어 먹는 도구예요.', 상: '끝이 여러 갈래로 갈라져 음식을 찍어 먹을 수 있게 만든 식기.' } },
+            { en: 'box', sub: 'Household', emoji: '📦', hints: { 하: '상자', 중: '물건을 담는 네모난 통이에요.', 상: '종이나 나무 등으로 만들어 물건을 넣어 보관하는 통.' } },
+            { en: 'key', sub: 'Household', emoji: '🔑', hints: { 하: '열쇠', 중: '문을 열고 잠글 때 쓰는 물건이에요.', 상: '자물쇠에 꽂아 돌려서 문을 열거나 잠그는 데 쓰는 도구.' } },
+            { en: 'phone', sub: 'Household', emoji: '📱', hints: { 하: '전화기, 휴대폰', 중: '멀리 있는 사람과 통화하는 기기예요.', 상: '음성이나 문자로 멀리 있는 사람과 소통할 수 있게 해 주는 전자 기기.' } },
+            { en: 'doll', sub: 'Household', emoji: '🪆', hints: { 하: '인형', 중: '사람이나 동물 모양으로 만든, 가지고 노는 장난감이에요.', 상: '사람이나 동물의 모습을 본떠 만든, 주로 아이들이 가지고 노는 장난감.' } },
+            { en: 'robot', sub: 'Household', emoji: '🤖', hints: { 하: '로봇', 중: '사람처럼 움직이거나 일을 대신 해주는 기계예요.', 상: '프로그램된 명령에 따라 스스로 움직이며 여러 작업을 수행하는 기계 장치.' } },
+            { en: 'umbrella', sub: 'Household', emoji: '☂️', hints: { 하: '우산', 중: '비가 올 때 펴서 머리 위로 받쳐 쓰는 물건이에요.', 상: '펼치면 둥근 지붕 모양이 되는, 비를 막기 위해 손에 들고 쓰는 물건.' } },
+            { en: 'present', sub: 'Household', emoji: '🎁', hints: { 하: '선물', 중: '축하하는 마음으로 다른 사람에게 주는 물건이에요.', 상: '축하나 감사의 마음을 담아 다른 사람에게 주는 물건.' } },
+            { en: 'guitar', sub: 'Household', emoji: '🎸', hints: { 하: '기타', 중: '줄을 튕겨서 소리를 내는 악기예요.', 상: '몸통에 여러 개의 줄이 달려 있어, 손으로 뜯거나 튕겨 소리를 내는 현악기.' } },
+            { en: 'basket', sub: 'Household', emoji: '🧺', hints: { 하: '바구니', 중: '물건을 담아 옮기는 통이에요.', 상: '대나무나 플라스틱 등으로 엮어 만들어, 물건을 담아 옮기는 데 쓰는 통.' } },
+
+            { en: 'sweater', sub: 'Clothing', emoji: '🧶', hints: { 하: '스웨터', 중: '털실로 짠 따뜻한 옷이에요.', 상: '털실 등을 짜서 만든, 겨울에 따뜻하게 입는 옷.' } },
+            { en: 'dress', sub: 'Clothing', emoji: '👗', hints: { 하: '원피스', 중: '위아래가 하나로 이어진 옷이에요.', 상: '상의와 치마 부분이 하나로 붙어 있어, 위아래를 따로 입지 않고 한 벌로 입는 옷.' } },
+            { en: 'skirt', sub: 'Clothing', emoji: '👚', hints: { 하: '치마', 중: '허리부터 아래로 늘어지는, 다리를 감싸는 옷이에요.', 상: '허리에 둘러 입어 하체를 감싸는 옷으로, 다리 사이가 나뉘어 있지 않은 것.' } },
+            { en: 'pants', sub: 'Clothing', emoji: '👖', hints: { 하: '바지', 중: '다리를 각각 감싸는, 아래에 입는 옷이에요.', 상: '허리부터 발목까지 두 다리를 각각 감싸도록 만들어진 하의.' } },
+            { en: 'hairpin', sub: 'Clothing', emoji: '📎', hints: { 하: '머리핀', 중: '머리카락을 고정할 때 꽂는 작은 핀이에요.', 상: '머리카락이 흘러내리지 않도록 머리에 꽂아 고정하는 작은 장신구.' } },
+            { en: 'socks', sub: 'Clothing', emoji: '🧦', hints: { 하: '양말', 중: '신발을 신기 전에 발에 먼저 신는 것이에요.', 상: '발과 발목을 감싸도록 천이나 실로 짜서 만든, 신발 안에 신는 옷.' } },
+            { en: 'shoes', sub: 'Clothing', emoji: '👟', hints: { 하: '신발', 중: '발을 보호하기 위해 신는 물건이에요.', 상: '걸을 때 발을 땅으로부터 보호하고 편안하게 해주기 위해 발에 신는 물건.' } },
+            { en: 'sunglasses', sub: 'Clothing', emoji: '🕶️', hints: { 하: '선글라스', 중: '햇빛으로부터 눈을 보호하는 색깔 있는 안경이에요.', 상: '강한 햇빛으로부터 눈을 보호하기 위해 쓰는 색이 있는 안경.' } },
+            { en: 'gloves', sub: 'Clothing', emoji: '🧤', hints: { 하: '장갑', 중: '손을 따뜻하게 하거나 보호하기 위해 끼는 물건이에요.', 상: '손 모양에 맞춰 만들어져, 추위나 상처로부터 손을 보호하기 위해 손에 끼는 것.' } },
+            { en: 'scarf', sub: 'Clothing', emoji: '🧣', hints: { 하: '목도리', 중: '추울 때 목에 두르는 물건이에요.', 상: '천이나 털실로 길게 짠 것으로, 추위를 막기 위해 목에 둘러 감는 물건.' } },
+            { en: 'belt', sub: 'Clothing', emoji: '🥋', hints: { 하: '벨트, 허리띠', 중: '바지가 흘러내리지 않게 허리에 두르는 것이에요.', 상: '바지나 치마가 흘러내리지 않도록 허리에 둘러 조이는 띠.' } },
+            { en: 'ring', sub: 'Clothing', emoji: '💍', hints: { 하: '반지', 중: '손가락에 끼는 동그란 장신구예요.', 상: '금속이나 보석으로 만들어, 손가락에 끼우는 동그란 장신구.' } },
+            { en: 'glasses', sub: 'Clothing', emoji: '👓', hints: { 하: '안경', 중: '눈이 잘 안 보일 때 얼굴에 쓰는 물건이에요.', 상: '렌즈와 테로 이루어져, 시력을 교정하거나 눈을 보호하기 위해 얼굴에 쓰는 물건.' } }
+        ];
+        pushWordsToBank('물건', thingsWords);
+
+        /* --- 동작 --- */
+        const actionWords = [
+            { en: 'open', sub: 'Daily Action', emoji: '🚪', hints: { 하: '열다', 중: '닫혀 있던 것을 열리게 하는 동작이에요.', 상: '닫혀 있던 문이나 물건을 손으로 젖히거나 들어 열리게 하는 동작.' } },
+            { en: 'close', sub: 'Daily Action', emoji: '🚪', hints: { 하: '닫다', 중: '열려 있던 것을 닫는 동작이에요.', 상: '열려 있던 문이나 물건을 다시 막아 닫히게 하는 동작.' } },
+            { en: 'sit', sub: 'Daily Action', emoji: '🪑', hints: { 하: '앉다', 중: '엉덩이를 의자나 바닥에 대는 동작이에요.', 상: '몸을 굽혀 엉덩이를 의자나 바닥에 붙이는 동작.' } },
+            { en: 'stand', sub: 'Daily Action', emoji: '🧍', hints: { 하: '서다', 중: '두 다리로 몸을 곧게 세우는 동작이에요.', 상: '앉거나 누워 있던 몸을 두 발로 곧게 세우는 동작.' } },
+            { en: 'read', sub: 'Daily Action', emoji: '📖', hints: { 하: '읽다', 중: '글을 보고 뜻을 이해하는 동작이에요.', 상: '책이나 글자를 눈으로 보고 그 의미를 이해하는 동작.' } },
+            { en: 'write', sub: 'Daily Action', emoji: '✍️', hints: { 하: '쓰다', 중: '연필 등으로 글자를 적는 동작이에요.', 상: '펜이나 연필을 이용해 종이 위에 글자를 적는 동작.' } },
+            { en: 'study', sub: 'Daily Action', emoji: '📚', hints: { 하: '공부하다', 중: '새로운 지식을 배우려고 노력하는 것이에요.', 상: '책이나 자료를 보며 지식이나 기술을 익히려고 노력하는 활동.' } },
+            { en: 'clean', sub: 'Daily Action', emoji: '🧹', hints: { 하: '청소하다', 중: '더러운 것을 치워서 깨끗하게 만드는 동작이에요.', 상: '먼지나 쓰레기를 치우고 닦아서 깨끗하게 만드는 활동.' } },
+            { en: 'make', sub: 'Daily Action', emoji: '🛠️', hints: { 하: '만들다', 중: '재료를 이용해 새로운 것을 생기게 하는 동작이에요.', 상: '재료나 도구를 이용해 없던 것을 새로 생기게 하는 동작.' } },
+            { en: 'use', sub: 'Daily Action', emoji: '🖐️', hints: { 하: '사용하다', 중: '물건을 목적에 맞게 쓰는 것이에요.', 상: '어떤 도구나 물건을 필요한 목적에 맞게 다루어 쓰는 것.' } },
+            { en: 'do', sub: 'Daily Action', emoji: '🙌', hints: { 하: '하다', 중: '어떤 일을 행동으로 옮기는 것이에요.', 상: '어떤 일이나 행동을 실제로 행하는 것을 나타내는 말.' } },
+            { en: 'help', sub: 'Daily Action', emoji: '🤝', hints: { 하: '돕다', 중: '다른 사람의 일을 거들어 주는 것이에요.', 상: '힘든 상황에 있는 사람을 위해 손을 보태거나 도와주는 행동.' } },
+            { en: 'watch', sub: 'Daily Action', emoji: '👀', hints: { 하: '보다, 지켜보다', 중: '눈으로 움직이는 것을 살펴보는 것이에요.', 상: '텔레비전이나 움직이는 대상을 눈으로 주의 깊게 살펴보는 것.' } },
+
+            { en: 'ride', sub: 'Move & Play', emoji: '🚲', hints: { 하: '타다', 중: '자전거나 말 등에 올라타는 동작이에요.', 상: '자전거, 말, 놀이기구 등에 올라 이동하는 동작.' } },
+            { en: 'play', sub: 'Move & Play', emoji: '🤸', hints: { 하: '놀다', 중: '재미있게 노는 동작이에요.', 상: '즐거움을 위해 게임이나 활동을 하며 노는 행동.' } },
+            { en: 'dance', sub: 'Move & Play', emoji: '💃', hints: { 하: '춤추다', 중: '음악에 맞춰 몸을 움직이는 동작이에요.', 상: '음악의 리듬에 맞추어 몸을 율동적으로 움직이는 동작.' } },
+            { en: 'move', sub: 'Move & Play', emoji: '🏃', hints: { 하: '움직이다', 중: '자리를 바꾸거나 몸을 움직이는 동작이에요.', 상: '한 위치에서 다른 위치로 몸이나 물건이 옮겨 가는 동작.' } },
+            { en: 'enter', sub: 'Move & Play', emoji: '🚪', hints: { 하: '들어가다', 중: '안쪽으로 들어가는 동작이에요.', 상: '밖에서 안으로 들어가는 동작.' } },
+            { en: 'catch', sub: 'Move & Play', emoji: '🖐️', hints: { 하: '잡다', 중: '날아오거나 움직이는 것을 손으로 잡는 동작이에요.', 상: '움직이거나 날아오는 물체를 손으로 붙잡는 동작.' } },
+            { en: 'kick', sub: 'Move & Play', emoji: '🦵', hints: { 하: '차다', 중: '발로 무언가를 세게 미는 동작이에요.', 상: '다리를 이용해 공 등을 세게 밀거나 치는 동작.' } },
+            { en: 'throw', sub: 'Move & Play', emoji: '🤾', hints: { 하: '던지다', 중: '손에 든 것을 멀리 날려 보내는 동작이에요.', 상: '손으로 물건을 잡아 힘껏 멀리 날려 보내는 동작.' } },
+            { en: 'climb', sub: 'Move & Play', emoji: '🧗', hints: { 하: '오르다, 기어오르다', 중: '손발을 이용해 높은 곳으로 올라가는 동작이에요.', 상: '손과 발을 이용해 산이나 나무 같은 높은 곳으로 올라가는 동작.' } },
+            { en: 'push', sub: 'Move & Play', emoji: '🫸', hints: { 하: '밀다', 중: '어떤 것을 앞으로 힘주어 미는 동작이에요.', 상: '몸이나 손을 이용해 물체를 앞쪽으로 힘주어 움직이게 하는 동작.' } },
+            { en: 'pull', sub: 'Move & Play', emoji: '🫷', hints: { 하: '당기다', 중: '어떤 것을 자기 쪽으로 끌어오는 동작이에요.', 상: '손으로 물체를 잡고 자기 쪽으로 끌어당기는 동작.' } },
+            { en: 'turn', sub: 'Move & Play', emoji: '🔄', hints: { 하: '돌다, 돌리다', 중: '방향을 바꾸거나 빙그르르 도는 동작이에요.', 상: '몸이나 물체가 한 방향에서 다른 방향으로 방향을 바꾸는 동작.' } },
+            { en: 'stop', sub: 'Move & Play', emoji: '🛑', hints: { 하: '멈추다', 중: '움직이던 것을 멈추는 동작이에요.', 상: '움직이거나 진행되던 일을 그 자리에서 멈추게 하는 동작.' } },
+            { en: 'exercise', sub: 'Move & Play', emoji: '🏋️', hints: { 하: '운동하다', 중: '건강을 위해 몸을 움직이는 활동이에요.', 상: '체력을 기르거나 건강을 유지하기 위해 몸을 움직이는 활동.' } },
+            { en: 'pick', sub: 'Move & Play', emoji: '🤏', hints: { 하: '고르다, 줍다', 중: '여러 개 중 하나를 선택하거나 집어드는 동작이에요.', 상: '여러 가지 중에서 하나를 골라내거나 손으로 집어 드는 동작.' } },
+            { en: 'touch', sub: 'Move & Play', emoji: '👆', hints: { 하: '만지다', 중: '손으로 무언가에 닿는 동작이에요.', 상: '손이나 손가락으로 어떤 물체에 살짝 닿는 동작.' } },
+            { en: 'grow', sub: 'Move & Play', emoji: '🌱', hints: { 하: '자라다', 중: '점점 커지는 것을 뜻해요.', 상: '식물이나 동물, 사람이 시간이 지나면서 점점 커지는 것.' } },
+
+            { en: 'listen', sub: 'Talk & Feel', emoji: '👂', hints: { 하: '듣다', 중: '귀로 소리를 주의해서 듣는 동작이에요.', 상: '귀를 기울여 소리나 말을 주의 깊게 듣는 동작.' } },
+            { en: 'sing', sub: 'Talk & Feel', emoji: '🎤', hints: { 하: '노래하다', 중: '목소리로 노래를 부르는 동작이에요.', 상: '가락에 맞춰 목소리로 노래를 부르는 동작.' } },
+            { en: 'meet', sub: 'Talk & Feel', emoji: '🤝', hints: { 하: '만나다', 중: '사람과 마주하게 되는 것이에요.', 상: '약속하거나 우연히 다른 사람과 마주하게 되는 것.' } },
+            { en: 'visit', sub: 'Talk & Feel', emoji: '🚶', hints: { 하: '방문하다', 중: '어떤 곳이나 사람을 찾아가는 것이에요.', 상: '특정한 목적을 가지고 어떤 장소나 사람을 찾아가는 것.' } },
+            { en: 'give', sub: 'Talk & Feel', emoji: '🎁', hints: { 하: '주다', 중: '내가 가진 것을 다른 사람에게 건네는 것이에요.', 상: '자신이 가진 물건이나 마음을 다른 사람에게 건네는 것.' } },
+            { en: 'thank', sub: 'Talk & Feel', emoji: '🙏', hints: { 하: '감사하다', 중: '고마운 마음을 표현하는 것이에요.', 상: '다른 사람에게서 받은 도움에 고마운 마음을 표현하는 것.' } },
+            { en: 'welcome', sub: 'Talk & Feel', emoji: '👋', hints: { 하: '환영하다', 중: '반갑게 맞이하는 것이에요.', 상: '찾아온 사람을 기쁜 마음으로 반갑게 맞이하는 것.' } },
+            { en: 'like', sub: 'Talk & Feel', emoji: '❤️', hints: { 하: '좋아하다', 중: '마음에 들어 하는 감정이에요.', 상: '어떤 대상에 대해 좋은 감정을 느끼는 것.' } },
+            { en: 'want', sub: 'Talk & Feel', emoji: '🙋', hints: { 하: '원하다', 중: '무언가를 갖거나 하고 싶어 하는 것이에요.', 상: '어떤 것을 가지거나 어떤 일을 하고 싶어 바라는 마음.' } },
+            { en: 'know', sub: 'Talk & Feel', emoji: '🧠', hints: { 하: '알다', 중: '어떤 사실을 이해하고 있는 것이에요.', 상: '어떤 사실이나 정보를 이해하고 기억하고 있는 상태.' } },
+            { en: 'think', sub: 'Talk & Feel', emoji: '💭', hints: { 하: '생각하다', 중: '머릿속으로 무언가를 헤아리는 것이에요.', 상: '어떤 문제나 대상에 대해 머릿속으로 헤아리고 판단하는 것.' } },
+            { en: 'love', sub: 'Talk & Feel', emoji: '💕', hints: { 하: '사랑하다', 중: '누군가를 아주 많이 좋아하는 마음이에요.', 상: '어떤 대상을 매우 아끼고 소중히 여기는 깊은 감정.' } },
+            { en: 'see', sub: 'Talk & Feel', emoji: '👁️', hints: { 하: '보다', 중: '눈으로 무언가를 알아차리는 것이에요.', 상: '눈을 통해 사물이나 사람의 모습을 알아보는 것.' } },
+            { en: 'look', sub: 'Talk & Feel', emoji: '👀', hints: { 하: '보다, 바라보다', 중: '눈을 어떤 쪽으로 향하게 하는 것이에요.', 상: '어떤 대상 쪽으로 시선을 향하고 살펴보는 것.' } },
+            { en: 'smile', sub: 'Talk & Feel', emoji: '😊', hints: { 하: '미소 짓다', 중: '기분이 좋아 살짝 웃는 것이에요.', 상: '소리 내지 않고 입가와 눈으로 기쁜 표정을 짓는 것.' } },
+            { en: 'cry', sub: 'Talk & Feel', emoji: '😢', hints: { 하: '울다', 중: '슬프거나 아파서 눈물을 흘리는 것이에요.', 상: '슬픔이나 아픔 등의 감정으로 눈물을 흘리는 행동.' } },
+            { en: 'laugh', sub: 'Talk & Feel', emoji: '😂', hints: { 하: '웃다', 중: '즐거워서 소리 내어 웃는 것이에요.', 상: '재미있거나 즐거운 감정을 느껴 소리 내어 웃는 행동.' } }
+        ];
+        pushWordsToBank('동작', actionWords);
+
+        /* --- 특징과 감정 --- */
+        const characterFeelingWords = [
+            { en: 'slim', sub: 'Look', emoji: '🧍', hints: { 하: '날씬한', 중: '몸매가 가늘고 마른 것을 나타내는 말이에요.', 상: '몸이 가늘고 균형 있게 마른 모습을 표현하는 말.' } },
+            { en: 'fat', sub: 'Look', emoji: '🐷', hints: { 하: '뚱뚱한', 중: '몸집이 큰 것을 나타내는 말이에요.', 상: '살이 많이 쪄서 몸집이 크고 살진 모습을 표현하는 말.' } },
+            { en: 'thin', sub: 'Look', emoji: '📏', hints: { 하: '얇은, 마른', 중: '두께가 아주 얇거나 몸이 마른 것을 나타내는 말이에요.', 상: '두께가 아주 얇거나, 몸에 살이 적어 가느다란 상태를 표현하는 말.' } },
+            { en: 'heavy', sub: 'Look', emoji: '🏋️', hints: { 하: '무거운', 중: '무게가 많이 나가는 것을 나타내는 말이에요.', 상: '들거나 움직이기 힘들 정도로 무게가 많이 나가는 상태를 표현하는 말.' } },
+            { en: 'light', sub: 'Look', emoji: '🪶', hints: { 하: '가벼운', 중: '무게가 적게 나가는 것을 나타내는 말이에요.', 상: '들거나 움직이기 쉬울 정도로 무게가 적게 나가는 상태를 표현하는 말.' } },
+            { en: 'strong', sub: 'Look', emoji: '💪', hints: { 하: '힘센, 강한', 중: '힘이 세다는 것을 나타내는 말이에요.', 상: '몸의 힘이 세거나 튼튼함을 표현하는 말.' } },
+            { en: 'weak', sub: 'Look', emoji: '🤒', hints: { 하: '약한', 중: '힘이 없다는 것을 나타내는 말이에요.', 상: '몸의 힘이 없어 쉽게 지치거나 약함을 표현하는 말.' } },
+            { en: 'straight', sub: 'Look', emoji: '➖', hints: { 하: '곧은, 생머리의', 중: '휘거나 굽지 않고 곧은 것을 나타내는 말이에요.', 상: '머리카락이나 선이 구부러지지 않고 곧게 뻗은 모습을 표현하는 말.' } },
+            { en: 'curly', sub: 'Look', emoji: '➰', hints: { 하: '곱슬곱슬한', 중: '머리카락이 동그랗게 말린 것을 나타내는 말이에요.', 상: '머리카락 등이 둥글게 말리며 구불구불한 모습을 표현하는 말.' } },
+            { en: 'pretty', sub: 'Look', emoji: '🌸', hints: { 하: '예쁜', 중: '보기 좋고 아름다운 것을 나타내는 말이에요.', 상: '생김새나 모습이 아름답고 보기 좋음을 표현하는 말.' } },
+            { en: 'cute', sub: 'Look', emoji: '🥰', hints: { 하: '귀여운', 중: '작고 사랑스러운 것을 나타내는 말이에요.', 상: '생김새가 작고 사랑스러워 좋아하는 마음이 들게 함을 표현하는 말.' } },
+            { en: 'beautiful', sub: 'Look', emoji: '🌺', hints: { 하: '아름다운', 중: '매우 예쁘고 보기 좋은 것을 나타내는 말이에요.', 상: '모습이나 경치가 매우 아름다워 감탄이 나옴을 표현하는 말.' } },
+            { en: 'young', sub: 'Look', emoji: '🧒', hints: { 하: '어린, 젊은', 중: '나이가 적다는 것을 나타내는 말이에요.', 상: '태어난 지 오래되지 않아 나이가 적음을 표현하는 말.' } },
+            { en: 'old', sub: 'Look', emoji: '👴', hints: { 하: '나이 많은, 늙은, 오래된', 중: '나이가 많거나 오래되었다는 것을 나타내는 말이에요.', 상: '태어난 지 오래되어 나이가 많거나, 만들어진 지 오래됨을 표현하는 말.' } },
+
+            { en: 'smart', sub: 'Character', emoji: '🧠', hints: { 하: '똑똑한', 중: '머리가 좋고 영리한 것을 나타내는 말이에요.', 상: '이해력과 판단력이 뛰어나 영리함을 표현하는 말.' } },
+            { en: 'quiet', sub: 'Character', emoji: '🤫', hints: { 하: '조용한', 중: '말이 없고 소리가 크지 않은 것을 나타내는 말이에요.', 상: '성격이 차분하고 말수가 적으며 시끄럽지 않음을 표현하는 말.' } },
+            { en: 'honest', sub: 'Character', emoji: '🤝', hints: { 하: '정직한', 중: '거짓말을 하지 않는 것을 나타내는 말이에요.', 상: '거짓 없이 사실을 있는 그대로 말하는 성격을 표현하는 말.' } },
+            { en: 'lazy', sub: 'Character', emoji: '🛌', hints: { 하: '게으른', 중: '움직이거나 일하기 싫어하는 것을 나타내는 말이에요.', 상: '움직이거나 일하는 것을 싫어하고 미루는 성격을 표현하는 말.' } },
+
+            { en: 'tired', sub: 'Feeling', emoji: '😪', hints: { 하: '피곤한', 중: '힘이 빠지고 쉬고 싶은 느낌이에요.', 상: '몸이나 마음의 힘이 다 빠져 쉬고 싶은 상태를 표현하는 말.' } },
+            { en: 'sleepy', sub: 'Feeling', emoji: '😴', hints: { 하: '졸린', 중: '잠이 오는 느낌이에요.', 상: '눈이 감기고 잠이 오는 듯한 상태를 표현하는 말.' } },
+            { en: 'hungry', sub: 'Feeling', emoji: '🍽️', hints: { 하: '배고픈', 중: '음식을 먹고 싶은 느낌이에요.', 상: '배 속이 비어 음식을 먹고 싶은 상태를 표현하는 말.' } },
+            { en: 'thirsty', sub: 'Feeling', emoji: '🥤', hints: { 하: '목마른', 중: '물을 마시고 싶은 느낌이에요.', 상: '목이 말라 물이나 음료를 마시고 싶은 상태를 표현하는 말.' } },
+            { en: 'sick', sub: 'Feeling', emoji: '🤒', hints: { 하: '아픈', 중: '몸이 안 좋아 병이 난 상태예요.', 상: '몸에 병이 생겨 건강하지 않은 상태를 표현하는 말.' } },
+            { en: 'busy', sub: 'Feeling', emoji: '⏰', hints: { 하: '바쁜', 중: '할 일이 많아 시간이 없는 상태예요.', 상: '해야 할 일이 많아서 여유 시간이 없는 상태를 표현하는 말.' } },
+            { en: 'surprised', sub: 'Feeling', emoji: '😲', hints: { 하: '놀란', 중: '예상하지 못한 일에 깜짝 놀란 느낌이에요.', 상: '뜻밖의 일이 생겨 깜짝 놀라는 감정을 표현하는 말.' } },
+            { en: 'afraid', sub: 'Feeling', emoji: '😨', hints: { 하: '무서운, 두려운', 중: '겁이 나고 무서운 느낌이에요.', 상: '위험하거나 나쁜 일이 일어날까 봐 겁이 나는 감정을 표현하는 말.' } }
+        ];
+        pushWordsToBank('특징과 감정', characterFeelingWords);
+
 
         /* ================= GAME STATE VARIABLES ================= */
         let currentQuestionIdx = 0;
@@ -745,15 +1196,15 @@ function selectDifficulty(diff) {
 
 /* ================= 카테고리(대분류/소분류) 선택 ================= */
 const categoryData = {
-    '숫자와 색깔': { en: 'Number & Color', emoji: '🔢', subs: ['Number', 'Color'] },
-    '사람과 동물': { en: 'People & Animal', emoji: '🐾', subs: ['Body', 'Family', 'Animal'] },
-    '취미와 직업': { en: 'Hobby & Job', emoji: '🎨', subs: ['Hobby', 'Subject', 'Job'] },
-    '음식': { en: 'Food', emoji: '🍎', subs: ['Fruit & Vegetable', 'Food'] },
-    '국가와 자연': { en: 'Country & Nature', emoji: '🌍', subs: ['Nature & Weather', 'Country'] },
-    '장소와 교통수단': { en: 'Places & Transportation', emoji: '🚌', subs: ['Place', 'Transportation'] },
-    '물건': { en: 'Things', emoji: '🎒', subs: ['School', 'House', 'Clothing'] },
-    '동작': { en: 'Action', emoji: '🏃', subs: ['Action'] },
-    '특징과 감정': { en: 'Conditions', emoji: '😊', subs: ['Character', 'Condition'] }
+    '숫자·색깔·시간': { en: 'Number, Color & Time', emoji: '🔢', subs: ['Number', 'Color', 'Time & Date'] },
+    '사람과 동물': { en: 'People & Animal', emoji: '🐾', subs: ['Body', 'Family & People', 'Animal'] },
+    '취미·과목·직업': { en: 'Hobby, Subject & Job', emoji: '🎨', subs: ['Sports & Hobby', 'Subject & Class', 'Job'] },
+    '음식과 음료': { en: 'Food & Drink', emoji: '🍎', subs: ['Fruit & Vegetable', 'Meal & Snack', 'Drink & Taste'] },
+    '국가와 자연': { en: 'Country, Nature & Weather', emoji: '🌍', subs: ['Country', 'Nature', 'Weather'] },
+    '장소·교통·방향': { en: 'Place, Transportation & Direction', emoji: '🚌', subs: ['Place', 'Transportation', 'Direction & Position'] },
+    '물건': { en: 'Things', emoji: '🎒', subs: ['School Supplies', 'Household', 'Clothing'] },
+    '동작': { en: 'Action', emoji: '🏃', subs: ['Daily Action', 'Move & Play', 'Talk & Feel'] },
+    '특징과 감정': { en: 'Character & Feeling', emoji: '😊', subs: ['Look', 'Character', 'Feeling'] }
 };
 
 let activeQuestions = [];
@@ -990,6 +1441,7 @@ function startSelectedGame() {
     document.getElementById('game-wrapper').classList.remove('hidden');
     document.body.style.background = '#b0d7eb';
 
+    playBgm('game');
     startGame();
 }
 
@@ -1348,6 +1800,7 @@ function restartGame() {
     selectedMajorCategory = null;
     selectedSubcategories = new Set();
     selectDifficulty(currentDifficulty || '중');
+    playBgm('intro');
 }
 
 selectDifficulty('중');
